@@ -87,7 +87,8 @@ HtexReader::HtexReader(bool premultiply, HtexInputHandler* io, HtexErrorHandler*
       _baseMemUsed(sizeof(*this)),
       _memUsed(_baseMemUsed),
       _opens(0),
-      _blockReads(0)
+      _blockReads(0),
+      _halfedgeMesh(NULL)
 {
     memset(&_zstream, 0, sizeof(_zstream));
 }
