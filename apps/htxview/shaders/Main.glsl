@@ -12,14 +12,9 @@ uniform float u_DisplacementScale;
 uniform bool u_EnableAdaptiveTess;
 
 
-layout(std430, binding = BUFFER_BINDING_PTEX_HALFEDGE_NORMALS)
+layout(std430, binding = BUFFER_BINDING_HALFEDGE_NORMALS)
 readonly buffer HalfedgeNormals {
     vec4 u_HalfedgeNormals[];
-};
-
-layout(std430, binding = BUFFER_BINDING_INPUT_TEXTURE_HANDLES)
-readonly buffer InputTextureHandles {
-    uint64_t u_InputTextureHandles[];
 };
 
 layout(std430, binding = CC_BUFFER_BINDING_CAGE_VERTEX_UVS)
@@ -31,50 +26,6 @@ layout(std430, binding = BUFFER_BINDING_OUTPUT_VERTICES)
 writeonly buffer ccm_OutputVertices {
     vec4 u_OutputVertices[];
 };
-
-vec2 ccm_HalfedgeVertexUv(int halfedgeID)
-{
-    int uvID = ccmu_Halfedges[halfedgeID].uvID;
-    float u = ccmu_VertexUvs[2*uvID+0];
-    float v = ccmu_VertexUvs[2*uvID+1];
-
-    return vec2(u,v);
-}
-
-vec2 computeBarycenterUV(int faceID)
-{
-    int halfedgeID = ccm_FaceToHalfedgeID(faceID);
-    int currentHalfedge = halfedgeID;
-    vec2 sum = vec2(0);
-    int n = 0;
-    do {
-        sum += ccm_HalfedgeVertexUv(currentHalfedge);
-        n++;
-        currentHalfedge = ccm_HalfedgeNextID(currentHalfedge);
-    } while(currentHalfedge != halfedgeID);
-    return sum / n;
-}
-
-
-vec2 interpolateVertexUv(vec2 halfedgeUV, int halfedgeID)
-{
-    vec2 uv0 = computeBarycenterUV(ccm_HalfedgeFaceID(halfedgeID));
-    vec2 uv1 = ccm_HalfedgeVertexUv(halfedgeID);
-    vec2 uv2 = ccm_HalfedgeVertexUv(ccm_HalfedgeNextID(halfedgeID));
-
-    float u = halfedgeUV.x;
-    float v = halfedgeUV.y;
-    float w = 1-u-v;
-
-    return w*uv0 + u*uv1 + v*uv2;
-}
-
-vec4 SampleUVMapped(int halfedgeID, vec2 halfedgeUV, int textureType)
-{
-    vec2 texCoords = interpolateVertexUv(halfedgeUV, halfedgeID);
-    sampler2D sampler = sampler2D(u_InputTextureHandles[textureType]);
-    return texture(sampler, texCoords);
-}
 
 /*******************************************************************************
 * TriangleLevelOfDetail -- Computes the LoD assocaited to a triangle
@@ -351,20 +302,14 @@ void main()
     val = dot(worldSpaceNormal, L) * 0.5 + 0.5; */
     vec4 color = vec4(vec3(val*0.8 + ambient*0.15), 1);
 #elif SHADING_MODE == SHADING_NORMAL
-    vec4 color = PtexTexture(i_FragmentUV, i_HalfedgeID, TEXTURETYPE_NORMAL);
+    vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_NORMAL);
 #elif SHADING_MODE == SHADING_BASECOLOR
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_COLOR);
 #elif SHADING_MODE == SHADING_DISPLACEMENT
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_DISPLACEMENT);
 #elif SHADING_MODE == SHADING_AO
-    vec4 color = clamp(PtexTexture(i_FragmentUV, i_HalfedgeID, TEXTURETYPE_AO), 0, 1);
+    vec4 color = clamp(Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_AO), 0, 1);
 #endif
-//color = vec4(0.5);
-
-    vec2 texCoords = interpolateVertexUv(i_FragmentUV, i_HalfedgeID);
-    //color = vec4(texCoords, 0, 1);
-
-    //color = vec4(abs(i_FragmentNormal), 1);
 
 #if FLAG_WIRE
     const float wireScale = 1.0; // scale of the wire in pixel

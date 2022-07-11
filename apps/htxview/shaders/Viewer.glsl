@@ -9,8 +9,6 @@ uniform sampler2DMS u_FramebufferSampler;
 uniform sampler2D   u_FramebufferSampler;
 #endif
 
-uniform sampler2DArray u_PtexSampler;
-
 // -------------------------------------------------------------------------------------------------
 /**
  * Vertex Shader

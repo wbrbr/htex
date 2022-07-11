@@ -134,8 +134,7 @@ enum ShadingMode {
 };
 
 // -----------------------------------------------------------------------------
-// Ptex Controller
-struct PtexController {
+struct HtexController {
     cc_Mesh *mesh;
     int32_t tessFactor;
     std::vector<int> quadLog2Resolutions;
@@ -143,7 +142,7 @@ struct PtexController {
     MinMagFilter minmagFilter;
     struct {bool wireframe, debugTexture, displace;} flags;
     uint64_t textureFlags;
-} g_ptex = {
+} g_htex = {
         NULL,
         0,
         {},
@@ -159,25 +158,23 @@ struct PtexController {
 enum { FRAMEBUFFER_SCENE, FRAMEBUFFER_COUNT };
 enum { STREAM_TRANSFORM, STREAM_COUNT };
 enum { CLOCK_RENDER, CLOCK_COUNT };
-enum { VERTEXARRAY_EMPTY, VERTEXARRAY_PTEX, VERTEXARRAY_COUNT };
+enum { VERTEXARRAY_EMPTY, VERTEXARRAY_COUNT };
 enum {
-    BUFFER_PTEX_VERTEX_TO_HALFEDGE,
-    BUFFER_PTEX_EDGE_TO_HALFEDGE,
-    BUFFER_PTEX_FACE_TO_HALFEDGE,
-    BUFFER_PTEX_HALFEDGES,
-    BUFFER_PTEX_VERTEX_POINTS,
-    BUFFER_PTEX_VERTEX_UVS,
-    BUFFER_PTEX_COUNTERS,
+    BUFFER_VERTEX_TO_HALFEDGE,
+    BUFFER_EDGE_TO_HALFEDGE,
+    BUFFER_FACE_TO_HALFEDGE,
+    BUFFER_HALFEDGES,
+    BUFFER_VERTEX_POINTS,
+    BUFFER_VERTEX_UVS,
+    BUFFER_COUNTERS,
     BUFFER_HTEX_TEXTURE_HANDLES,
     BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS,
     BUFFER_HTEX_ALPHA_TEXTURE_HANDLES,
-    BUFFER_PTEX_HALFEDGE_NORMALS,
+    BUFFER_HALFEDGE_NORMALS,
     BUFFER_BARYCENTERS,
     BUFFER_FRUSTUM_PLANES,
     BUFFER_OUTPUT_VERTICES,
-
-    BUFFER_CONVERT_TEXTURES_EDGE_IMAGE_HANDLES,
-    BUFFER_CONVERT_TEXTURES_INPUT_TEXTURE_HANDLES,
+    BUFFER_EDGE_IMAGE_HANDLES,
 
     BUFFER_COUNT
 };
@@ -191,7 +188,7 @@ enum {
 };
 enum {
     PROGRAM_VIEWER,
-    PROGRAM_PTEX,
+    PROGRAM_MAIN,
     PROGRAM_TEXTURE_CONVERSION,
     PROGRAM_COMPUTE_HALFEDGE_NORMALS,
 
@@ -203,15 +200,15 @@ enum {
     UNIFORM_VIEWER_GAMMA,
     UNIFORM_VIEWER_VIEWPORT,
 
-    UNIFORM_PTEX_MVP,
-    UNIFORM_PTEX_TESS_FACTOR,
-    UNIFORM_PTEX_SCREEN_RESOLUTION,
-    UNIFORM_PTEX_ALPHA_TEXTURES,
-    UNIFORM_PTEX_DISPLACEMENT_SCALE,
-    UNIFORM_PTEX_DISPLACEMENT_BIAS,
-    UNIFORM_PTEX_MODELVIEW,
-    UNIFORM_PTEX_MODEL,
-    UNIFORM_PTEX_LOD_FACTOR,
+    UNIFORM_MVP,
+    UNIFORM_TESS_FACTOR,
+    UNIFORM_SCREEN_RESOLUTION,
+    UNIFORM_ALPHA_TEXTURES,
+    UNIFORM_DISPLACEMENT_SCALE,
+    UNIFORM_DISPLACEMENT_BIAS,
+    UNIFORM_MODELVIEW,
+    UNIFORM_MODEL,
+    UNIFORM_LOD_FACTOR,
     UNIFORM_ENABLE_ADAPTIVE_TESS,
 
     UNIFORM_COUNT
@@ -327,15 +324,14 @@ void ConfigureViewerProgram()
 }
 
 // -----------------------------------------------------------------------------
-// set ptex program uniforms
-void ConfigurePtexProgram()
+void ConfigureMainProgram()
 {
-    glProgramUniform2f(g_gl.programs[PROGRAM_PTEX],
-                       g_gl.uniforms[UNIFORM_PTEX_SCREEN_RESOLUTION],
+    glProgramUniform2f(g_gl.programs[PROGRAM_MAIN],
+                       g_gl.uniforms[UNIFORM_SCREEN_RESOLUTION],
                        g_window.width, g_window.height);
-    glProgramUniform1f(g_gl.programs[PROGRAM_PTEX],
-                       g_gl.uniforms[UNIFORM_PTEX_TESS_FACTOR],
-                       1u << g_ptex.tessFactor);
+    glProgramUniform1f(g_gl.programs[PROGRAM_MAIN],
+                       g_gl.uniforms[UNIFORM_TESS_FACTOR],
+                       1u << g_htex.tessFactor);
 }
 
 
@@ -381,31 +377,31 @@ void djp_setup_halfedge(djg_program* djp)
 {
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_VERTEX_TO_HALFEDGE %i\n",
-                     BUFFER_PTEX_VERTEX_TO_HALFEDGE);
+                     BUFFER_VERTEX_TO_HALFEDGE);
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_EDGE_TO_HALFEDGE %i\n",
-                     BUFFER_PTEX_EDGE_TO_HALFEDGE);
+                     BUFFER_EDGE_TO_HALFEDGE);
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_FACE_TO_HALFEDGE %i\n",
-                     BUFFER_PTEX_FACE_TO_HALFEDGE);
+                     BUFFER_FACE_TO_HALFEDGE);
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_HALFEDGE %i\n",
-                     BUFFER_PTEX_HALFEDGES);
+                     BUFFER_HALFEDGES);
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_VERTEX_POINT %i\n",
-                     BUFFER_PTEX_VERTEX_POINTS);
+                     BUFFER_VERTEX_POINTS);
     djgp_push_string(djp,
                      "#define CC_BUFFER_BINDING_CAGE_COUNTERS %i\n",
-                     BUFFER_PTEX_COUNTERS);
+                     BUFFER_COUNTERS);
     djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "Halfedge.glsl");
 }
 
-bool LoadPtexProgram()
+bool LoadMainProgram()
 {
     djg_program *djp = djgp_create();
-    GLuint *glp = &g_gl.programs[PROGRAM_PTEX];
+    GLuint *glp = &g_gl.programs[PROGRAM_MAIN];
 
-    LOG("Loading {Ptex-Program}");
+    LOG("Loading {Main-Program}");
 
     djgp_push_string(djp, "#extension GL_NV_gpu_shader5 : enable\n");
     djgp_push_string(djp, "#extension GL_ARB_bindless_texture : enable\n");
@@ -417,16 +413,16 @@ bool LoadPtexProgram()
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_ALPHA_TEXTURE_HANDLES %i\n", BUFFER_HTEX_ALPHA_TEXTURE_HANDLES);
     djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "Htex.glsl");
 
-    if (g_ptex.flags.wireframe) {
+    if (g_htex.flags.wireframe) {
         djgp_push_string(djp, "#define FLAG_WIRE 1\n");
     }
-    if (g_ptex.flags.debugTexture) {
+    if (g_htex.flags.debugTexture) {
         djgp_push_string(djp, "#define FLAG_DEBUG_TEXTURE 1\n");
     }
-    if (g_ptex.flags.displace) {
+    if (g_htex.flags.displace) {
         djgp_push_string(djp, "#define FLAG_DISPLACE 1\n");
     }
-    djgp_push_string(djp, "#define FLAG_FILTERING %i\n", g_ptex.filter);
+    djgp_push_string(djp, "#define FLAG_FILTERING %i\n", g_htex.filter);
     djgp_push_string(djp, "#define FLAG_DISABLE_HTEX %i\n", g_state.disableHtex);
 
     djgp_push_string(djp, "#define FILTERING_NONE %i\n", FILTERING_NONE);
@@ -447,13 +443,12 @@ bool LoadPtexProgram()
     djgp_push_string(djp, "#define SHADING_MODE %i\n", g_state.shadingMode);
 
 
-    djgp_push_string(djp, "#define BUFFER_BINDING_PTEX_HALFEDGE_NORMALS %i\n", BUFFER_PTEX_HALFEDGE_NORMALS);
+    djgp_push_string(djp, "#define BUFFER_BINDING_HALFEDGE_NORMALS %i\n", BUFFER_HALFEDGE_NORMALS);
     djgp_push_string(djp, "#define BUFFER_BINDING_FRUSTUM_PLANES %i\n", BUFFER_FRUSTUM_PLANES);
-    djgp_push_string(djp, "#define CC_BUFFER_BINDING_CAGE_VERTEX_UVS %i\n", BUFFER_PTEX_VERTEX_UVS);
-    djgp_push_string(djp, "#define BUFFER_BINDING_INPUT_TEXTURE_HANDLES %i\n", BUFFER_CONVERT_TEXTURES_INPUT_TEXTURE_HANDLES);
+    djgp_push_string(djp, "#define CC_BUFFER_BINDING_CAGE_VERTEX_UVS %i\n", BUFFER_VERTEX_UVS);
     djgp_push_string(djp, "#define BUFFER_BINDING_OUTPUT_VERTICES %i\n", BUFFER_OUTPUT_VERTICES);
 
-    djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "PtexMesh.glsl");
+    djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "Main.glsl");
 
     if (!djgp_to_gl(djp, 450, false, true, glp)) {
         djgp_release(djp);
@@ -462,19 +457,19 @@ bool LoadPtexProgram()
     }
     djgp_release(djp);
 
-    g_gl.uniforms[UNIFORM_PTEX_MVP] =
+    g_gl.uniforms[UNIFORM_MVP] =
         glGetUniformLocation(*glp, "u_ModelViewProjection");
-    g_gl.uniforms[UNIFORM_PTEX_SCREEN_RESOLUTION] = glGetUniformLocation(*glp, "u_ScreenResolution");
-    g_gl.uniforms[UNIFORM_PTEX_TESS_FACTOR] = glGetUniformLocation(*glp, "u_TessFactor");
-    g_gl.uniforms[UNIFORM_PTEX_ALPHA_TEXTURES] = glGetUniformLocation(*glp, "u_AlphaTextures");
-    g_gl.uniforms[UNIFORM_PTEX_DISPLACEMENT_SCALE] = glGetUniformLocation(*glp, "u_DisplacementScale");
-    g_gl.uniforms[UNIFORM_PTEX_DISPLACEMENT_BIAS] = glGetUniformLocation(*glp, "u_DisplacementBias");
-    g_gl.uniforms[UNIFORM_PTEX_MODELVIEW] = glGetUniformLocation(*glp, "u_ModelView");
-    g_gl.uniforms[UNIFORM_PTEX_MODEL] = glGetUniformLocation(*glp, "u_Model");
-    g_gl.uniforms[UNIFORM_PTEX_LOD_FACTOR] = glGetUniformLocation(*glp, "u_LodFactor");
+    g_gl.uniforms[UNIFORM_SCREEN_RESOLUTION] = glGetUniformLocation(*glp, "u_ScreenResolution");
+    g_gl.uniforms[UNIFORM_TESS_FACTOR] = glGetUniformLocation(*glp, "u_TessFactor");
+    g_gl.uniforms[UNIFORM_ALPHA_TEXTURES] = glGetUniformLocation(*glp, "u_AlphaTextures");
+    g_gl.uniforms[UNIFORM_DISPLACEMENT_SCALE] = glGetUniformLocation(*glp, "u_DisplacementScale");
+    g_gl.uniforms[UNIFORM_DISPLACEMENT_BIAS] = glGetUniformLocation(*glp, "u_DisplacementBias");
+    g_gl.uniforms[UNIFORM_MODELVIEW] = glGetUniformLocation(*glp, "u_ModelView");
+    g_gl.uniforms[UNIFORM_MODEL] = glGetUniformLocation(*glp, "u_Model");
+    g_gl.uniforms[UNIFORM_LOD_FACTOR] = glGetUniformLocation(*glp, "u_LodFactor");
     g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS] = glGetUniformLocation(*glp, "u_EnableAdaptiveTess");
 
-    ConfigurePtexProgram();
+    ConfigureMainProgram();
 
     return (glGetError() == GL_NO_ERROR);
 }
@@ -488,7 +483,7 @@ bool LoadHalfedgeNormalsComputeProgram()
     LOG("Loading {ComputeHalfedgeNormals-Program}");
 
     djp_setup_halfedge(djp);
-    djgp_push_string(djp, "#define BUFFER_BINDING_PTEX_HALFEDGE_NORMALS %i\n", BUFFER_PTEX_HALFEDGE_NORMALS);
+    djgp_push_string(djp, "#define BUFFER_BINDING_HALFEDGE_NORMALS %i\n", BUFFER_HALFEDGE_NORMALS);
 
     djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "ComputeHalfedgeNormals.glsl");
 
@@ -511,7 +506,7 @@ bool LoadPrograms()
     bool success = true;
 
     if (success) success = LoadViewerProgram();
-    if (success) success = LoadPtexProgram();
+    if (success) success = LoadMainProgram();
     if (success) success = LoadHalfedgeNormalsComputeProgram();
 
     return success;
@@ -522,7 +517,7 @@ bool LoadPrograms()
 // Buffer Loading
 //
 ////////////////////////////////////////////////////////////////////////////////
-bool LoadPtexBuffer(
+bool LoadBuffer(
         int32_t bufferID,
         GLsizeiptr bufferByteSize,
         const void *data,
@@ -545,51 +540,51 @@ bool LoadPtexBuffer(
 
 bool LoadCageVertexToHalfedgeIDsBuffer(const cc_Mesh *cage)
 {
-    return LoadPtexBuffer(BUFFER_PTEX_VERTEX_TO_HALFEDGE,
-                                  ccm_VertexCount(cage) * sizeof(int32_t),
-                                  cage->vertexToHalfedgeIDs,
-                                  0);
+    return LoadBuffer(BUFFER_VERTEX_TO_HALFEDGE,
+                      ccm_VertexCount(cage) * sizeof(int32_t),
+                      cage->vertexToHalfedgeIDs,
+                      0);
 }
 
 bool LoadCageEdgeToHalfedgeIDsBuffer(const cc_Mesh *cage)
 {
-    return LoadPtexBuffer(BUFFER_PTEX_EDGE_TO_HALFEDGE,
-                                  ccm_EdgeCount(cage) * sizeof(int32_t),
-                                  cage->edgeToHalfedgeIDs,
-                                  0);
+    return LoadBuffer(BUFFER_EDGE_TO_HALFEDGE,
+                      ccm_EdgeCount(cage) * sizeof(int32_t),
+                      cage->edgeToHalfedgeIDs,
+                      0);
 }
 
 bool LoadCageFaceToHalfedgeIDsBuffer(const cc_Mesh *cage)
 {
-    return LoadPtexBuffer(BUFFER_PTEX_FACE_TO_HALFEDGE,
-                                  ccm_FaceCount(cage) * sizeof(int32_t),
-                                  cage->faceToHalfedgeIDs,
-                                  0);
+    return LoadBuffer(BUFFER_FACE_TO_HALFEDGE,
+                      ccm_FaceCount(cage) * sizeof(int32_t),
+                      cage->faceToHalfedgeIDs,
+                      0);
 }
 
 bool LoadCageHalfedgeBuffer(const cc_Mesh *cage)
 {
-    return LoadPtexBuffer(BUFFER_PTEX_HALFEDGES,
-                                  sizeof(cc_Halfedge) * ccm_HalfedgeCount(cage),
-                                  cage->halfedges,
-                                  0);
+    return LoadBuffer(BUFFER_HALFEDGES,
+                      sizeof(cc_Halfedge) * ccm_HalfedgeCount(cage),
+                      cage->halfedges,
+                      0);
 }
 
 bool LoadCageVertexPointBuffer(const cc_Mesh *cage)
 {
-    return LoadPtexBuffer(BUFFER_PTEX_VERTEX_POINTS,
-                                  sizeof(cc_VertexPoint) * ccm_VertexCount(cage),
-                                  cage->vertexPoints,
-                                  0);
+    return LoadBuffer(BUFFER_VERTEX_POINTS,
+                      sizeof(cc_VertexPoint) * ccm_VertexCount(cage),
+                      cage->vertexPoints,
+                      0);
 }
 
 bool LoadCageVertexUvBuffer(const cc_Mesh *cage)
 {
     if (ccm_UvCount(cage) != 0){
-        return LoadPtexBuffer(BUFFER_PTEX_VERTEX_UVS,
-                                      sizeof(cc_VertexUv) * ccm_UvCount(cage),
-                                      cage->uvs,
-                                      0);
+        return LoadBuffer(BUFFER_VERTEX_UVS,
+                          sizeof(cc_VertexUv) * ccm_UvCount(cage),
+                          cage->uvs,
+                          0);
     }
     return true;
 }
@@ -610,10 +605,10 @@ bool LoadCageCounterBuffer(const cc_Mesh *cage)
         ccm_UvCount(cage)
     };
 
-    return LoadPtexBuffer(BUFFER_PTEX_COUNTERS,
-                                  sizeof(counters),
-                                  &counters,
-                                  0);
+    return LoadBuffer(BUFFER_COUNTERS,
+                      sizeof(counters),
+                      &counters,
+                      0);
 }
 
 
@@ -621,17 +616,21 @@ bool LoadBuffers()
 {
     bool success = true;
 
-    if (success) success = LoadCageVertexToHalfedgeIDsBuffer(g_ptex.mesh);
-    if (success) success = LoadCageEdgeToHalfedgeIDsBuffer(g_ptex.mesh);
-    if (success) success = LoadCageFaceToHalfedgeIDsBuffer(g_ptex.mesh);
-    if (success) success = LoadCageHalfedgeBuffer(g_ptex.mesh);
-    if (success) success = LoadCageVertexPointBuffer(g_ptex.mesh);
-    if (success) success = LoadCageVertexUvBuffer(g_ptex.mesh);
-    if (success) success = LoadCageCounterBuffer(g_ptex.mesh);
-    if (success) success = LoadPtexBuffer(BUFFER_PTEX_HALFEDGE_NORMALS, g_ptex.mesh->halfedgeCount*4*sizeof(float), nullptr, 0);
-    if (success) success = LoadPtexBuffer(BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS, g_ptex.quadLog2Resolutions.size()*sizeof(g_ptex.quadLog2Resolutions[0]), g_ptex.quadLog2Resolutions.data(), 0);
-    if (success) success = LoadPtexBuffer(BUFFER_BARYCENTERS, g_ptex.mesh->faceCount*4*sizeof(float), nullptr, 0);
-    if (success) success = LoadPtexBuffer(BUFFER_OUTPUT_VERTICES, g_ptex.mesh->halfedgeCount*3*64*4*sizeof(float), nullptr, GL_MAP_READ_BIT);
+    if (success) success = LoadCageVertexToHalfedgeIDsBuffer(g_htex.mesh);
+    if (success) success = LoadCageEdgeToHalfedgeIDsBuffer(g_htex.mesh);
+    if (success) success = LoadCageFaceToHalfedgeIDsBuffer(g_htex.mesh);
+    if (success) success = LoadCageHalfedgeBuffer(g_htex.mesh);
+    if (success) success = LoadCageVertexPointBuffer(g_htex.mesh);
+    if (success) success = LoadCageVertexUvBuffer(g_htex.mesh);
+    if (success) success = LoadCageCounterBuffer(g_htex.mesh);
+    if (success) success = LoadBuffer(BUFFER_HALFEDGE_NORMALS, g_htex.mesh->halfedgeCount * 4 * sizeof(float), nullptr,
+                                      0);
+    if (success) success = LoadBuffer(BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS,
+                                      g_htex.quadLog2Resolutions.size() * sizeof(g_htex.quadLog2Resolutions[0]),
+                                      g_htex.quadLog2Resolutions.data(), 0);
+    if (success) success = LoadBuffer(BUFFER_BARYCENTERS, g_htex.mesh->faceCount * 4 * sizeof(float), nullptr, 0);
+    if (success) success = LoadBuffer(BUFFER_OUTPUT_VERTICES, g_htex.mesh->halfedgeCount * 3 * 64 * 4 * sizeof(float),
+                                      nullptr, GL_MAP_READ_BIT);
 
     return success;
 }
@@ -949,140 +948,6 @@ bool ParseCommandLine(int argc, char **argv, Args& args)
 
 
 //TODO: support non-RGBA8 Htex textures
-#if 0
-bool LoadPtexTextures(PtexTexture *ptex, std::vector<unsigned int>& ptexTextures)
-{
-    const int32_t faceCount = ptex->numFaces();
-    struct {
-        GLenum internalformat, format, type;
-        size_t componentSize;
-    } textureData = {
-        0, 0, 0,
-        0
-    };
-
-    // parse data types
-    switch (ptex->numChannels()) {
-    case 1: {
-        textureData.format = GL_RED;
-    } break;
-    case 2: {
-        textureData.format = GL_RG;
-    } break;
-    case 3: {
-        textureData.format = GL_RGB;
-    } break;
-    case 4: {
-        textureData.format = GL_RGBA;
-    } break;
-    default:
-        LOG("Unsupported number of channels");
-        return false;
-    }
-
-    switch (ptex->dataType()) {
-    case Ptex::dt_uint8: {
-        textureData.type = GL_UNSIGNED_BYTE;
-        textureData.componentSize = sizeof(uint8_t);
-
-        if (ptex->numChannels() == 1) {
-            textureData.internalformat = GL_R8;
-        } else if (ptex->numChannels() == 2) {
-            textureData.internalformat = GL_RG8;
-        } else if (ptex->numChannels() == 3) {
-            textureData.internalformat = GL_RGB8;
-        } else if (ptex->numChannels() == 4) {
-            textureData.internalformat = GL_RGBA8;
-        }
-    } break;
-    case Ptex::dt_uint16: {
-        textureData.type = GL_UNSIGNED_SHORT;
-        textureData.componentSize = sizeof(uint16_t);
-
-        if (ptex->numChannels() == 1) {
-            textureData.internalformat = GL_R16;
-        } else if (ptex->numChannels() == 2) {
-            textureData.internalformat = GL_RG16;
-        } else if (ptex->numChannels() == 3) {
-            textureData.internalformat = GL_RGB16;
-        } else if (ptex->numChannels() == 4) {
-            textureData.internalformat = GL_RGBA16;
-        }
-    } break;
-    case Ptex::dt_half: {
-        textureData.type = GL_HALF_FLOAT;
-        textureData.componentSize = 2;
-
-        if (ptex->numChannels() == 1) {
-            textureData.internalformat = GL_R16F;
-        } else if (ptex->numChannels() == 2) {
-            textureData.internalformat = GL_RG16F;
-        } else if (ptex->numChannels() == 3) {
-            textureData.internalformat = GL_RGB16F;
-        } else if (ptex->numChannels() == 4) {
-            textureData.internalformat = GL_RGBA16F;
-        }
-    } break;
-    case Ptex::dt_float: {
-        textureData.type = GL_FLOAT;
-        textureData.componentSize = sizeof(float);
-
-        if (ptex->numChannels() == 1) {
-            textureData.internalformat = GL_R32F;
-        } else if (ptex->numChannels() == 2) {
-            textureData.internalformat = GL_RG32F;
-        } else if (ptex->numChannels() == 3) {
-            textureData.internalformat = GL_RGB32F;
-        } else if (ptex->numChannels() == 4) {
-            textureData.internalformat = GL_RGBA32F;
-        }
-    } break;
-    }
-
-    if (!ptexTextures.empty()) {
-        glDeleteTextures(ptexTextures.size(), ptexTextures.data());
-    }
-
-    ptexTextures.resize(faceCount);
-
-    glCreateTextures(GL_TEXTURE_2D, ptexTextures.size(), ptexTextures.data());
-    std::vector<uint8_t> texels;
-    for (int faceid = 0; faceid < faceCount; faceid++) {
-        Ptex::Res res = ptex->getFaceInfo(faceid).res;
-        int mipmapLevels = 1 + std::max(res.ulog2, res.vlog2);
-        int width = res.u();
-        int height = res.v();
-
-        size_t byteSize = width*height*ptex->numChannels()*textureData.componentSize;
-        if (texels.size() < byteSize) {
-            texels.resize(byteSize, 0);
-        }
-        ptex->getData(faceid, texels.data(), 0);
-
-        GLuint texture = ptexTextures[faceid];
-        glTextureStorage2D(texture,
-                           mipmapLevels,
-                           textureData.internalformat,
-                           width,
-                           height);
-        glTextureSubImage2D(texture,
-                            0,
-                            0,0,
-                            width,
-                            height,
-                            textureData.format,
-                            textureData.type,
-                            texels.data());
-        glGenerateTextureMipmap(texture);
-        glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-        glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-    }
-
-    return glGetError() == GL_NO_ERROR;
-}
-#endif
 
 bool LoadHalfedgeTextureHandles()
 {
@@ -1100,7 +965,8 @@ bool LoadHalfedgeTextureHandles()
 
     if (glGetError() != GL_NO_ERROR) return false;
 
-    return LoadPtexBuffer(BUFFER_HTEX_TEXTURE_HANDLES, g_gl.edgeTextureHandles.size() * sizeof(g_gl.edgeTextureHandles[0]), g_gl.edgeTextureHandles.data(), 0);
+    return LoadBuffer(BUFFER_HTEX_TEXTURE_HANDLES, g_gl.edgeTextureHandles.size() * sizeof(g_gl.edgeTextureHandles[0]),
+                      g_gl.edgeTextureHandles.data(), 0);
 }
 
 bool CreateHalfedgeSampler()
@@ -1112,7 +978,7 @@ bool CreateHalfedgeSampler()
     glGenSamplers(1, sampler);
     int min_filter;
     int mag_filter;
-    switch(g_ptex.minmagFilter) {
+    switch(g_htex.minmagFilter) {
         case MINMAG_FILTER_TRILINEAR:
             min_filter = GL_LINEAR_MIPMAP_LINEAR;
             mag_filter = GL_LINEAR;
@@ -1129,7 +995,7 @@ bool CreateHalfedgeSampler()
             break;
     }
     int wrap;
-    switch(g_ptex.filter) {
+    switch(g_htex.filter) {
         case FILTERING_NONE:
             wrap = GL_CLAMP_TO_EDGE;
             break;
@@ -1159,7 +1025,7 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
     djp_setup_halfedge(djp_preprocessCorners);
     djgp_push_string(djp_preprocessCorners,
                      "#define BUFFER_BINDING_EDGE_IMAGE_HANDLES %i\n",
-                     BUFFER_CONVERT_TEXTURES_EDGE_IMAGE_HANDLES);
+                     BUFFER_EDGE_IMAGE_HANDLES);
     djgp_push_file(djp_preprocessCorners, PATH_TO_SHADER_DIRECTORY "PreprocessCorners.glsl");
 
     GLuint program_preprocessCorners;
@@ -1179,7 +1045,7 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
     djp_setup_halfedge(djp_preprocessCornersFacePoints);
     djgp_push_string(djp_preprocessCornersFacePoints,
                      "#define BUFFER_BINDING_EDGE_IMAGE_HANDLES %i\n",
-                     BUFFER_CONVERT_TEXTURES_EDGE_IMAGE_HANDLES);
+                     BUFFER_EDGE_IMAGE_HANDLES);
     djgp_push_file(djp_preprocessCornersFacePoints, PATH_TO_SHADER_DIRECTORY "PreprocessCornersFacePoints.glsl");
 
     GLuint program_preprocessCornersFacePoints;
@@ -1195,10 +1061,10 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
 
 
     std::vector<uint64_t> edgeImageHandles;
-    edgeImageHandles.resize(g_ptex.mesh->edgeCount);
+    edgeImageHandles.resize(g_htex.mesh->edgeCount);
 
-    int offset = textureType * g_ptex.mesh->edgeCount;
-    for (int edgeID = 0; edgeID < g_ptex.mesh->edgeCount; edgeID++) {
+    int offset = textureType * g_htex.mesh->edgeCount;
+    for (int edgeID = 0; edgeID < g_htex.mesh->edgeCount; edgeID++) {
         uint64_t handle = glGetImageHandleARB(edgeTextures[offset+edgeID], 0, false, 0, GL_RGBA8);
         edgeImageHandles[edgeID] = handle;
         if (!glIsImageHandleResidentARB(handle)) {
@@ -1206,13 +1072,14 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
         }
     }
 
-    LoadPtexBuffer(BUFFER_CONVERT_TEXTURES_EDGE_IMAGE_HANDLES, edgeImageHandles.size()*sizeof(edgeImageHandles[0]), edgeImageHandles.data(), 0);
+    LoadBuffer(BUFFER_EDGE_IMAGE_HANDLES, edgeImageHandles.size() * sizeof(edgeImageHandles[0]),
+               edgeImageHandles.data(), 0);
 
     glUseProgram(program_preprocessCorners);
-    glDispatchCompute(g_ptex.mesh->vertexCount, 1, 1);
+    glDispatchCompute(g_htex.mesh->vertexCount, 1, 1);
 
     glUseProgram(program_preprocessCornersFacePoints);
-    glDispatchCompute(g_ptex.mesh->faceCount, 1, 1);
+    glDispatchCompute(g_htex.mesh->faceCount, 1, 1);
 
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
@@ -1237,28 +1104,28 @@ bool LoadHtex(const char *pathToFile, int textureType)
     const float* vertexPositions = NULL;
     int vertexCount;
 
-    if (!g_ptex.mesh) {
-        g_ptex.mesh = htex->getHalfedgeMesh();
+    if (!g_htex.mesh) {
+        g_htex.mesh = htex->getHalfedgeMesh();
     }
 
-    int offset = textureType*g_ptex.mesh->edgeCount;
+    int offset = textureType * g_htex.mesh->edgeCount;
     if ((int)g_gl.edgeTextures.size()>offset) {
         glDeleteTextures(g_gl.edgeTextures.size()-offset, &g_gl.edgeTextures[offset]);
     }
-    g_gl.edgeTextures.resize((textureType+1)*g_ptex.mesh->edgeCount);
+    g_gl.edgeTextures.resize((textureType+1) * g_htex.mesh->edgeCount);
 
-    glCreateTextures(GL_TEXTURE_2D, g_ptex.mesh->edgeCount, &g_gl.edgeTextures[offset]);
+    glCreateTextures(GL_TEXTURE_2D, g_htex.mesh->edgeCount, &g_gl.edgeTextures[offset]);
 
     size_t max_res = 1 << NUM_LOG2_RESOLUTIONS;
-    g_ptex.quadLog2Resolutions.resize(2*g_ptex.mesh->edgeCount);
+    g_htex.quadLog2Resolutions.resize(2 * g_htex.mesh->edgeCount);
 
     uint8_t* buf = new uint8_t[4*max_res*max_res];
-    for (int edgeID = 0; edgeID < g_ptex.mesh->edgeCount; edgeID++) {
+    for (int edgeID = 0; edgeID < g_htex.mesh->edgeCount; edgeID++) {
         htex->getData(edgeID, buf, 0);
 
         Htex::Res res = htex->getQuadInfo(edgeID).res;
-        g_ptex.quadLog2Resolutions[2*edgeID+0] = res.ulog2;
-        g_ptex.quadLog2Resolutions[2*edgeID+1] = res.vlog2;
+        g_htex.quadLog2Resolutions[2 * edgeID + 0] = res.ulog2;
+        g_htex.quadLog2Resolutions[2 * edgeID + 1] = res.vlog2;
 
         int mipmapLevels = 1 + std::max(res.ulog2, res.vlog2);
         int width = res.u();
@@ -1329,10 +1196,10 @@ bool CreateAlphaTextures()
         res_v *= 2;
     }
 
-    LoadPtexBuffer(BUFFER_HTEX_ALPHA_TEXTURE_HANDLES,
-                   g_gl.alphaTextureHandles.size()*sizeof(g_gl.alphaTextureHandles[0]),
-                   g_gl.alphaTextureHandles.data(),
-                   0);
+    LoadBuffer(BUFFER_HTEX_ALPHA_TEXTURE_HANDLES,
+               g_gl.alphaTextureHandles.size() * sizeof(g_gl.alphaTextureHandles[0]),
+               g_gl.alphaTextureHandles.data(),
+               0);
     return (glGetError() == GL_NO_ERROR);
 }
 
@@ -1359,15 +1226,15 @@ bool Load(int argc, char **argv)
 #if 0
     uint8_t* texels = new uint8_t[4*(1<<NUM_LOG2_RESOLUTIONS)*(1<<NUM_LOG2_RESOLUTIONS)];
     char path[100];
-    for (int edgeID = 0; edgeID < g_ptex.mesh->edgeCount; edgeID++) {
-        unsigned int size = 1 << g_ptex.edgeLog2Resolutions[edgeID];
+    for (int edgeID = 0; edgeID < g_htex.mesh->edgeCount; edgeID++) {
+        unsigned int size = 1 << g_htex.edgeLog2Resolutions[edgeID];
         glGetTextureImage(g_gl.edgeTextures[edgeID], 0, GL_RGBA, GL_UNSIGNED_BYTE, 4*size*size, texels);
         stbi_flip_vertically_on_write(true);
         snprintf(path, 100, "texture%02i.png", edgeID);
         stbi_write_png(path, size, size, 4, texels, 0);
 
-        int halfedgeID = ccm_EdgeToHalfedgeID(g_ptex.mesh, edgeID);
-        int twinID = ccm_HalfedgeTwinID(g_ptex.mesh, halfedgeID);
+        int halfedgeID = ccm_EdgeToHalfedgeID(g_htex.mesh, edgeID);
+        int twinID = ccm_HalfedgeTwinID(g_htex.mesh, halfedgeID);
         if (twinID >= 0) {
             printf("%02d: interior\n", edgeID);
         } else {
@@ -1410,7 +1277,7 @@ void Release()
         if (g_gl.clocks[i])
             djgc_release(g_gl.clocks[i]);
 
-    ccm_Release(g_ptex.mesh);
+    ccm_Release(g_htex.mesh);
 }
 
 
@@ -1497,28 +1364,28 @@ void RenderScene()
     const glm::mat4 mvp = proj * modelView;
     glm::vec4 planes[6];
     LoadFrustum(mvp, planes);
-    LoadPtexBuffer(BUFFER_FRUSTUM_PLANES, sizeof(planes), planes, 0);
+    LoadBuffer(BUFFER_FRUSTUM_PLANES, sizeof(planes), planes, 0);
 
     djgc_start(g_gl.clocks[CLOCK_RENDER]);
 
     glUseProgram(g_gl.programs[PROGRAM_COMPUTE_HALFEDGE_NORMALS]);
-    glDispatchCompute(g_ptex.mesh->halfedgeCount, 1, 1);
+    glDispatchCompute(g_htex.mesh->halfedgeCount, 1, 1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
     //glDisable(GL_CULL_FACE);
     glCullFace(GL_BACK);
-    glUseProgram(g_gl.programs[PROGRAM_PTEX]);
-    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_PTEX_MVP], 1, 0, &mvp[0][0]);
-    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_PTEX_MODELVIEW], 1, 0, &modelView[0][0]);
-    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_PTEX_MODEL], 1, 0, &model[0][0]);
-    glUniform1f(g_gl.uniforms[UNIFORM_PTEX_DISPLACEMENT_SCALE], g_state.displacementScale);
-    glUniform1f(g_gl.uniforms[UNIFORM_PTEX_DISPLACEMENT_BIAS], g_state.displacementBias);
-    glUniform1f(g_gl.uniforms[UNIFORM_PTEX_LOD_FACTOR], ComputeLodFactor());
+    glUseProgram(g_gl.programs[PROGRAM_MAIN]);
+    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_MVP], 1, 0, &mvp[0][0]);
+    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_MODELVIEW], 1, 0, &modelView[0][0]);
+    glUniformMatrix4fv(g_gl.uniforms[UNIFORM_MODEL], 1, 0, &model[0][0]);
+    glUniform1f(g_gl.uniforms[UNIFORM_DISPLACEMENT_SCALE], g_state.displacementScale);
+    glUniform1f(g_gl.uniforms[UNIFORM_DISPLACEMENT_BIAS], g_state.displacementBias);
+    glUniform1f(g_gl.uniforms[UNIFORM_LOD_FACTOR], ComputeLodFactor());
     glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS], g_state.enableAdaptiveTess);
     glBindVertexArray(g_gl.vertexArrays[VERTEXARRAY_EMPTY]);
-    glDrawArrays(GL_PATCHES, 0, 3*g_ptex.mesh->halfedgeCount);
+    glDrawArrays(GL_PATCHES, 0, 3 * g_htex.mesh->halfedgeCount);
     glBindVertexArray(0);
     glUseProgram(0);
     glDisable(GL_DEPTH_TEST);
@@ -1526,9 +1393,9 @@ void RenderScene()
     djgc_stop(g_gl.clocks[CLOCK_RENDER]);
 
 #if 0
-    int tessFactor = 1 << g_ptex.tessFactor;
-    float* outputVertices = (float*)glMapNamedBufferRange(g_gl.buffers[BUFFER_OUTPUT_VERTICES], 0, 3*g_ptex.mesh->halfedgeCount*tessFactor*4*sizeof(float), GL_MAP_READ_BIT);
-    /* for (int i = 0; i < 3*g_ptex.mesh->edgeCount*g_ptex.tessFactor; i++) {
+    int tessFactor = 1 << g_htex.tessFactor;
+    float* outputVertices = (float*)glMapNamedBufferRange(g_gl.buffers[BUFFER_OUTPUT_VERTICES], 0, 3*g_htex.mesh->halfedgeCount*tessFactor*4*sizeof(float), GL_MAP_READ_BIT);
+    /* for (int i = 0; i < 3*g_htex.mesh->edgeCount*g_htex.tessFactor; i++) {
         printf("%f %f %f\n",
                outputVertices[4*i+0],
                outputVertices[4*i+1],
@@ -1536,9 +1403,9 @@ void RenderScene()
         );
     } */
 
-    for (int halfedgeID = 0; halfedgeID < g_ptex.mesh->halfedgeCount; halfedgeID++) {
-        int nextID = ccm_HalfedgeNextID(g_ptex.mesh, halfedgeID);
-        int twinID = ccm_HalfedgeTwinID(g_ptex.mesh, halfedgeID);
+    for (int halfedgeID = 0; halfedgeID < g_htex.mesh->halfedgeCount; halfedgeID++) {
+        int nextID = ccm_HalfedgeNextID(g_htex.mesh, halfedgeID);
+        int twinID = ccm_HalfedgeTwinID(g_htex.mesh, halfedgeID);
 
 
         // check for prev/next equality
@@ -1681,17 +1548,17 @@ void RenderViewer()
         // Mesh Parameters
         ImGui::SetNextWindowPos(ImVec2(270, 10), ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(380, 235), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Ptex Settings");
+        ImGui::Begin("Htex Settings");
         {
-            if (ImGui::Checkbox("Wire", &g_ptex.flags.wireframe)) {
+            if (ImGui::Checkbox("Wire", &g_htex.flags.wireframe)) {
                 LoadPrograms();
             }
             ImGui::SameLine();
-            if (ImGui::Checkbox("Displace", &g_ptex.flags.displace)) {
+            if (ImGui::Checkbox("Displace", &g_htex.flags.displace)) {
                 LoadPrograms();
             }
 
-            if (g_ptex.flags.displace) {
+            if (g_htex.flags.displace) {
                 ImGui::DragFloat("Displacement scale", &g_state.displacementScale, 0.1f, 0.f, 10.f);
                 ImGui::DragFloat("Displacement bias", &g_state.displacementBias, 0.1f, 0, 1);
             }
@@ -1700,7 +1567,7 @@ void RenderViewer()
                     "None",
                     "Borderless",
             };
-            if (ImGui::Combo("Filter type", (int*)&g_ptex.filter, filter_items, sizeof(filter_items)/sizeof(filter_items[0]))) {
+            if (ImGui::Combo("Filter type", (int*)&g_htex.filter, filter_items, sizeof(filter_items) / sizeof(filter_items[0]))) {
                 LoadPrograms();
                 CreateHalfedgeSampler();
                 LoadHalfedgeTextureHandles();
@@ -1712,7 +1579,7 @@ void RenderViewer()
                     "Linear",
                     "Nearest"
             };
-            if (ImGui::Combo("Min/mag filter", (int*)&g_ptex.minmagFilter, intra_filter_items, 3)) {
+            if (ImGui::Combo("Min/mag filter", (int*)&g_htex.minmagFilter, intra_filter_items, 3)) {
                 CreateHalfedgeSampler();
                 LoadHalfedgeTextureHandles();
                 CreateAlphaTextures();
@@ -1728,8 +1595,8 @@ void RenderViewer()
             if (g_state.enableAdaptiveTess) {
                 ImGui::SliderFloat("Edge length", &g_state.edgeLength, 1, 20.f);
             } else {
-                if (ImGui::SliderInt("Tessellation factor", &g_ptex.tessFactor, 0, 6)) {
-                    ConfigurePtexProgram();
+                if (ImGui::SliderInt("Tessellation factor", &g_htex.tessFactor, 0, 6)) {
+                    ConfigureMainProgram();
                 }
             }
 
@@ -1903,7 +1770,7 @@ void ResizeCallback(GLFWwindow* window, int width, int height)
 
     LoadSceneFramebufferTexture();
     LoadSceneFramebuffer();
-    ConfigurePtexProgram();
+    ConfigureMainProgram();
 }
 
 bool CheckExtensions(const std::vector<const char*>& extensions)

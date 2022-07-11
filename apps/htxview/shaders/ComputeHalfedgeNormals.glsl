@@ -1,7 +1,7 @@
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = BUFFER_BINDING_PTEX_HALFEDGE_NORMALS)
+layout(std430, binding = BUFFER_BINDING_HALFEDGE_NORMALS)
 writeonly buffer HalfedgeNormals {
     vec4 u_HalfedgeNormals[];
 };
