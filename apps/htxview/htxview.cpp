@@ -1026,6 +1026,9 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
     djgp_push_string(djp_preprocessCorners,
                      "#define BUFFER_BINDING_EDGE_IMAGE_HANDLES %i\n",
                      BUFFER_EDGE_IMAGE_HANDLES);
+    djgp_push_string(djp_preprocessCorners,
+                    "#define BUFFER_BINDING_HTEX_QUAD_LOG2_RESOLUTIONS %i\n",
+                    BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
     djgp_push_file(djp_preprocessCorners, PATH_TO_SHADER_DIRECTORY "PreprocessCorners.glsl");
 
     GLuint program_preprocessCorners;
@@ -1046,6 +1049,9 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
     djgp_push_string(djp_preprocessCornersFacePoints,
                      "#define BUFFER_BINDING_EDGE_IMAGE_HANDLES %i\n",
                      BUFFER_EDGE_IMAGE_HANDLES);
+    djgp_push_string(djp_preprocessCorners,
+                    "#define BUFFER_BINDING_HTEX_QUAD_LOG2_RESOLUTIONS %i\n",
+                    BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
     djgp_push_file(djp_preprocessCornersFacePoints, PATH_TO_SHADER_DIRECTORY "PreprocessCornersFacePoints.glsl");
 
     GLuint program_preprocessCornersFacePoints;

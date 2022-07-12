@@ -7,6 +7,11 @@ readonly buffer EdgeImageHandles {
     uint64_t u_EdgeImageHandles[];
 };
 
+layout(std430, binding=BUFFER_BINDING_HTEX_QUAD_LOG2_RESOLUTIONS)
+readonly buffer QuadLog2Resolutions {
+    ivec2 u_QuadLog2Resolutions[];
+};
+
 vec4 SampleVertexTexel(int halfedgeID)
 {
     int twinID = ccm_HalfedgeTwinID(halfedgeID);
@@ -20,16 +25,33 @@ vec4 SampleVertexTexel(int halfedgeID)
     return imageLoad(edgeImage, uv * (size-1));
 }
 
-void StoreVertexTexel(int halfedgeID, vec4 color)
+void StoreVertexTexels(int halfedgeID, vec4 color, int min_res)
 {
     int twinID = ccm_HalfedgeTwinID(halfedgeID);
-    ivec2 uv = (halfedgeID > twinID) ? ivec2(1,0) : ivec2(0,1);
 
     int edgeID = ccm_HalfedgeEdgeID(halfedgeID);
     layout(rgba8) image2D edgeImage = layout(rgba8) image2D(u_EdgeImageHandles[edgeID]);
-    ivec2 size = imageSize(edgeImage).xy;
+    ivec2 log_res = u_QuadLog2Resolutions[edgeID];
+    ivec2 size = ivec2(1 << log_res.x, 1 << log_res.y);
 
-    imageStore(edgeImage, uv*(size-1), color);
+    ivec2 log_corner_size = log_res - ivec2(min_res, min_res);
+    ivec2 corner_size = ivec2(1) << log_corner_size;
+
+    /*if (ivec2(min_res) != log_res) {
+        color = vec4(0,1,0,1);
+    }*/
+
+    for (int j = 0; j < corner_size.y; j++) {
+        for (int i = 0; i < corner_size.x; i++) {
+            ivec2 tex_coords = ivec2(size.x-1-i, j);
+            if (halfedgeID < twinID) tex_coords = size - ivec2(1) - tex_coords;
+
+            imageStore(edgeImage, tex_coords, color);
+        }
+    }
+
+    //ivec2 uv = (halfedgeID > twinID) ? ivec2(1,0) : ivec2(0,1);
+    //imageStore(edgeImage, uv*(size-1), color);
 }
 
 void main()
@@ -42,12 +64,17 @@ void main()
     int startHalfedge = ccm_VertexToHalfedgeID(vertexID);
     int currentHalfedge = startHalfedge;
 
+    int min_res = 1000;
+
     vec4 color = vec4(0);
     {
         int n = 0;
         do {
             color += SampleVertexTexel(currentHalfedge);
             n += 1;
+
+            ivec2 res = u_QuadLog2Resolutions[ccm_HalfedgeEdgeID(currentHalfedge)];
+            min_res = min(min_res, min(res.x, res.y));
 
             currentHalfedge = ccm_HalfedgeTwinID(currentHalfedge);
             if (currentHalfedge < 0) break;
@@ -62,6 +89,9 @@ void main()
                 color += SampleVertexTexel(currentHalfedge);
                 n += 1;
 
+                ivec2 res = u_QuadLog2Resolutions[ccm_HalfedgeEdgeID(currentHalfedge)];
+                min_res = min(min_res, min(res.x, res.y));
+
                 prevHalfedge = ccm_HalfedgePrevID(currentHalfedge);
                 currentHalfedge = ccm_HalfedgeTwinID(prevHalfedge);
             }
@@ -71,6 +101,9 @@ void main()
             ivec2 size = imageSize(edgeImage).xy;
             color += imageLoad(edgeImage, ivec2(0,1)*(size-1));
             n += 1;
+
+            ivec2 res = u_QuadLog2Resolutions[edgeID];
+            min_res = min(min_res, min(res.x, res.y));
         }
 
         color /= n;
@@ -80,7 +113,7 @@ void main()
     currentHalfedge = startHalfedge;
 
     do {
-        StoreVertexTexel(currentHalfedge, color);
+        StoreVertexTexels(currentHalfedge, color, min_res);
 
         currentHalfedge = ccm_HalfedgeTwinID(currentHalfedge);
         if (currentHalfedge < 0) break;
@@ -91,7 +124,7 @@ void main()
         int prevHalfedge = ccm_HalfedgePrevID(startHalfedge);
         currentHalfedge = ccm_HalfedgeTwinID(prevHalfedge);
         while (currentHalfedge >= 0) {
-            StoreVertexTexel(currentHalfedge, color);
+            StoreVertexTexels(currentHalfedge, color, min_res);
 
             prevHalfedge = ccm_HalfedgePrevID(currentHalfedge);
             currentHalfedge = ccm_HalfedgeTwinID(prevHalfedge);
