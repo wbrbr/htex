@@ -31,9 +31,9 @@ include_directories(submodules/ptex/src/ptex)
 
 set(HTEX_BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 set(HTEX_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-add_subdirectory(lib)
-set_property(TARGET Htex_static ptxinfo halftest ftest rtest wtest PROPERTY FOLDER "htex")
-include_directories(lib/src/htex)
+add_subdirectory(submodules/htex-api)
+set_property(TARGET Htex_static PROPERTY FOLDER "htex")
+include_directories(submodules/htex-api/src/htex)
 
 
 # set path to dependencies
