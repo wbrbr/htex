@@ -19,3 +19,6 @@
 [submodule "submodules/ptex"]
 	path = submodules/ptex
 	url = https://github.com/wdas/ptex
+[submodule "submodules/htex-api"]
+	path = submodules/htex-api
+	url = https://github.com/wbrbr/htex-api
