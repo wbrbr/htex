@@ -189,7 +189,6 @@ enum {
 enum {
     PROGRAM_VIEWER,
     PROGRAM_MAIN,
-    PROGRAM_TEXTURE_CONVERSION,
     PROGRAM_COMPUTE_HALFEDGE_NORMALS,
 
     PROGRAM_COUNT
@@ -1229,27 +1228,6 @@ bool Load(int argc, char **argv)
     if (success && args.displacementFile) success = PreprocessCorners(g_gl.edgeTextures, TEXTURETYPE_DISPLACEMENT);
     if (success) success = LoadHalfedgeTextureHandles();
 
-#if 0
-    uint8_t* texels = new uint8_t[4*(1<<NUM_LOG2_RESOLUTIONS)*(1<<NUM_LOG2_RESOLUTIONS)];
-    char path[100];
-    for (int edgeID = 0; edgeID < g_htex.mesh->edgeCount; edgeID++) {
-        unsigned int size = 1 << g_htex.edgeLog2Resolutions[edgeID];
-        glGetTextureImage(g_gl.edgeTextures[edgeID], 0, GL_RGBA, GL_UNSIGNED_BYTE, 4*size*size, texels);
-        stbi_flip_vertically_on_write(true);
-        snprintf(path, 100, "texture%02i.png", edgeID);
-        stbi_write_png(path, size, size, 4, texels, 0);
-
-        int halfedgeID = ccm_EdgeToHalfedgeID(g_htex.mesh, edgeID);
-        int twinID = ccm_HalfedgeTwinID(g_htex.mesh, halfedgeID);
-        if (twinID >= 0) {
-            printf("%02d: interior\n", edgeID);
-        } else {
-            printf("%02d: boundary\n", edgeID);
-        }
-    }
-    delete[] texels;
-#endif
-
     for (int i = 0; i < CLOCK_COUNT; ++i) {
         g_gl.clocks[i] = djgc_create();
     }
@@ -1398,16 +1376,10 @@ void RenderScene()
 
     djgc_stop(g_gl.clocks[CLOCK_RENDER]);
 
+    // enable with uniform tessellation to check for cracks
 #if 0
     int tessFactor = 1 << g_htex.tessFactor;
     float* outputVertices = (float*)glMapNamedBufferRange(g_gl.buffers[BUFFER_OUTPUT_VERTICES], 0, 3*g_htex.mesh->halfedgeCount*tessFactor*4*sizeof(float), GL_MAP_READ_BIT);
-    /* for (int i = 0; i < 3*g_htex.mesh->edgeCount*g_htex.tessFactor; i++) {
-        printf("%f %f %f\n",
-               outputVertices[4*i+0],
-               outputVertices[4*i+1],
-               outputVertices[4*i+2]
-        );
-    } */
 
     for (int halfedgeID = 0; halfedgeID < g_htex.mesh->halfedgeCount; halfedgeID++) {
         int nextID = ccm_HalfedgeNextID(g_htex.mesh, halfedgeID);
@@ -1423,16 +1395,12 @@ void RenderScene()
                         outputVertices[4*(idx+i)+3]);
 
             int idx_adj = (3*nextID+0)*tessFactor;
-            //printf("%i / %i\n", idx, idx_adj);
             glm::vec4 v_adj(
                     outputVertices[4*(idx_adj+tessFactor-i)+0],
                     outputVertices[4*(idx_adj+tessFactor-i)+1],
                     outputVertices[4*(idx_adj+tessFactor-i)+2],
                     outputVertices[4*(idx_adj+tessFactor-i)+3]);
 
-            /*printf("%f %f %f %f / %f %f %f %f\n",
-                   v.x,v.y,v.z,v.w,
-                   v_adj.x, v_adj.y, v_adj.z, v_adj.w); */
             if (v != v_adj) {
                 printf("Crack found! (prev/next): %d\n", i);
                 printf("%f %f %f / %f %f %f (%g)\n", v.x,v.y,v.z, v_adj.x, v_adj.y, v_adj.z, glm::length(v-v_adj));
