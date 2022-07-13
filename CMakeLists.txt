@@ -94,3 +94,5 @@ target_link_libraries(${DEMO} Htex_static)
 
 unset(DEMO)
 unset(SRC_FILES)
+
+add_executable(obj_to_ccm submodules/HalfedgeCatmullClark/examples/obj_to_ccm.c)
