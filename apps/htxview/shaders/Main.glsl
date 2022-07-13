@@ -170,7 +170,6 @@ void main()
 
 #ifdef TESS_EVALUATION_SHADER
 layout (triangles, ccw, equal_spacing) in;
-//layout (triangles, ccw, fractional_even_spacing) in;
 patch in Triangle {
     vec4 vertexPoints[3];
     vec4 vertexNormals[3];
@@ -190,13 +189,8 @@ void main()
     float v = gl_TessCoord.y;
     float w = gl_TessCoord.z;
 
-    #if 0
-    vec4 vertexPoint = orderIndependentMAD(vertices, w, u, v);
-    vec3 vertexNormal = orderIndependentMAD(normals, w, u, v).xyz;
-    #else
     precise vec4 vertexPoint = w*vertices[0] + u*vertices[1] + v*vertices[2];
     precise vec3 vertexNormal = (normals[0]*w + normals[1]*u + normals[2]*v).xyz;
-    #endif
     vertexNormal = normalize(vertexNormal);
 
     float displacement = 0;
@@ -217,13 +211,11 @@ void main()
         int ui = int(round(u*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+0) * int(u_TessFactor) + ui;
         u_OutputVertices[idx] = vertexPoint;
-        //u_OutputVertices[idx] = vec4(displacement);
     } else if (w == 0) {
         // edge 1-2
         int vi = int(round(v*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+1) * int(u_TessFactor) + vi;
         u_OutputVertices[idx] = vertexPoint;
-        //u_OutputVertices[idx] = vec4(displacement);
     }
 
     gl_Position = u_ModelViewProjection * vertexPoint;
@@ -298,8 +290,6 @@ void main()
     float ambient = 1;
     ambient = 0;
 
-    /* ambient = 0;
-    val = dot(worldSpaceNormal, L) * 0.5 + 0.5; */
     vec4 color = vec4(vec3(val*0.8 + ambient*0.15), 1);
 #elif SHADING_MODE == SHADING_NORMAL
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_NORMAL);
