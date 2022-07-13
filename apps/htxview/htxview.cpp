@@ -1213,6 +1213,17 @@ bool Load(int argc, char **argv)
     Args args{};
     bool success = ParseCommandLine(argc, argv, args);
 
+    if (!success) {
+        fprintf(stderr, "Usage: %s [--color <color htex>] [--disp <displacement htex>]\n", argv[0]);
+    }
+
+    if (args.colorFile) {
+        g_state.shadingMode = SHADING_BASECOLOR;
+    } else if (args.displacementFile) {
+        g_state.shadingMode = SHADING_DISPLACEMENT;
+    }
+
+    if (!args.displacementFile) g_state.displacementBias = 0;
 
     InitDebugOutput();
     if (success) success = LoadTextures();
