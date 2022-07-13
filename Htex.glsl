@@ -37,24 +37,6 @@ vec2 TriangleToQuadUV(int halfedgeID, vec2 uv)
     }
 }
 
-/// quadIDs contains the ID of the quad for the current, next and prev halfedges
-vec4 Htexture_sample(ivec3 quadIDs, vec2 xy, vec2 xyNext, vec2 xyPrev, int channel)
-{
-    vec4 c = vec4(0);
-    float alpha = 0;
-
-    c += SampleQuad(quadIDs.x, xy, channel);
-    alpha += SampleAlpha(quadIDs.x, xy);
-
-    c += SampleQuad(quadIDs.y, xyNext, channel);
-    alpha += SampleAlpha(quadIDs.y, xy);
-
-    c += SampleQuad(quadIDs.z, xyPrev, channel);
-    alpha += SampleAlpha(quadIDs.z, xy);
-
-    return c / alpha;
-}
-
 vec4 Htexture(int halfedgeID, vec2 uv, int channel)
 {
     int nextID = ccm_HalfedgeNextID(halfedgeID);

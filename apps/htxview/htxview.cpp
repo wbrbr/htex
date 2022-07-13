@@ -410,7 +410,7 @@ bool LoadMainProgram()
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_TEXTURE_HANDLES %i\n", BUFFER_HTEX_TEXTURE_HANDLES);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_QUAD_LOG2_RESOLUTIONS %i\n", BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_ALPHA_TEXTURE_HANDLES %i\n", BUFFER_HTEX_ALPHA_TEXTURE_HANDLES);
-    djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "Htex.glsl");
+    djgp_push_file(djp, PATH_TO_ROOT_DIRECTORY "Htex.glsl");
 
     if (g_htex.flags.wireframe) {
         djgp_push_string(djp, "#define FLAG_WIRE 1\n");
