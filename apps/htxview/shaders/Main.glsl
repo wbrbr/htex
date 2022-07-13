@@ -210,20 +210,20 @@ void main()
         // edge 2-0
         int wi = int(round(w*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+2) * int(u_TessFactor)+ wi;
-        //u_OutputVertices[idx] = vertexPoint;
-        u_OutputVertices[idx] = vec4(displacement);
+        u_OutputVertices[idx] = vertexPoint;
+        //u_OutputVertices[idx] = vec4(displacement);
     } else if (v == 0) {
         // edge 0-1
         int ui = int(round(u*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+0) * int(u_TessFactor) + ui;
-        //u_OutputVertices[idx] = vertexPoint;
-        u_OutputVertices[idx] = vec4(displacement);
+        u_OutputVertices[idx] = vertexPoint;
+        //u_OutputVertices[idx] = vec4(displacement);
     } else if (w == 0) {
         // edge 1-2
         int vi = int(round(v*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+1) * int(u_TessFactor) + vi;
-        //u_OutputVertices[idx] = vertexPoint;
-        u_OutputVertices[idx] = vec4(displacement);
+        u_OutputVertices[idx] = vertexPoint;
+        //u_OutputVertices[idx] = vec4(displacement);
     }
 
     gl_Position = u_ModelViewProjection * vertexPoint;
