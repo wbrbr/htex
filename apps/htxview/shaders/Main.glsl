@@ -271,34 +271,10 @@ layout (location = 0) out vec4 o_FragmentColor;
 
 void main()
 {
-#if SHADING_MODE == SHADING_DIFFUSE_AO
-    vec3 objectSpaceNormal = PtexTexture(i_FragmentUV, i_HalfedgeID, TEXTURETYPE_NORMAL).xyz * 2 -1;
-    vec3 worldSpaceNormal = normalize(vec3(u_Model * vec4(objectSpaceNormal, 0)));
-
-    vec3 L = normalize(vec3(0.3, 1.0, 0.3));
-    float val = clamp(dot(worldSpaceNormal, L), 0, 1) * 0.5;
-
-    float ao = clamp(PtexTexture(i_FragmentUV, i_HalfedgeID, TEXTURETYPE_AO).r, 0, 1);
-    vec3 ambient = vec3(0.5) * ao;
-    vec4 color = vec4(vec3(ambient + val), 1);
-#elif SHADING_MODE == SHADING_DIFFUSE
-    vec3 objectSpaceNormal = PtexTexture(i_FragmentUV, i_HalfedgeID, TEXTURETYPE_NORMAL).xyz * 2 -1;
-    vec3 worldSpaceNormal = normalize(vec3(u_Model * vec4(objectSpaceNormal, 0)));
-    vec3 L = normalize(vec3(0.4, 1.0, 1.0));
-
-    float val = clamp(dot(worldSpaceNormal, L), 0, 1);
-    float ambient = 1;
-    ambient = 0;
-
-    vec4 color = vec4(vec3(val*0.8 + ambient*0.15), 1);
-#elif SHADING_MODE == SHADING_NORMAL
-    vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_NORMAL);
-#elif SHADING_MODE == SHADING_BASECOLOR
+#if SHADING_MODE == SHADING_BASECOLOR
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_COLOR);
 #elif SHADING_MODE == SHADING_DISPLACEMENT
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_DISPLACEMENT);
-#elif SHADING_MODE == SHADING_AO
-    vec4 color = clamp(Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_AO), 0, 1);
 #endif
 
 #if FLAG_WIRE

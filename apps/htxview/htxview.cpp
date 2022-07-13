@@ -118,19 +118,13 @@ enum MinMagFilter {
 enum TextureType {
     TEXTURETYPE_COLOR,
     TEXTURETYPE_DISPLACEMENT,
-    TEXTURETYPE_NORMAL,
-    TEXTURETYPE_AO,
 
     TEXTURETYPE_COUNT
 };
 
 enum ShadingMode {
-    SHADING_DIFFUSE_AO,
-    SHADING_DIFFUSE,
     SHADING_BASECOLOR,
-    SHADING_NORMAL,
     SHADING_DISPLACEMENT,
-    SHADING_AO
 };
 
 // -----------------------------------------------------------------------------
@@ -240,9 +234,8 @@ struct MiscState {
     float anisotropy;
     float edgeLength;
     ShadingMode shadingMode;
-    bool disableHtex;
     bool enableAdaptiveTess;
-} g_state = { 1, 0.5f, 1, 7, SHADING_BASECOLOR, false, false };
+} g_state = { 1, 0.5f, 1, 7, SHADING_BASECOLOR, false };
 
 ////////////////////////////////////////////////////////////////////////////////
 // Utility functions
@@ -422,23 +415,16 @@ bool LoadMainProgram()
         djgp_push_string(djp, "#define FLAG_DISPLACE 1\n");
     }
     djgp_push_string(djp, "#define FLAG_FILTERING %i\n", g_htex.filter);
-    djgp_push_string(djp, "#define FLAG_DISABLE_HTEX %i\n", g_state.disableHtex);
 
     djgp_push_string(djp, "#define FILTERING_NONE %i\n", FILTERING_NONE);
     djgp_push_string(djp, "#define FILTERING_BORDERLESS %i\n", FILTERING_BORDERLESS);
 
     djgp_push_string(djp, "#define TEXTURETYPE_COLOR %i\n", TEXTURETYPE_COLOR);
     djgp_push_string(djp, "#define TEXTURETYPE_DISPLACEMENT %i\n", TEXTURETYPE_DISPLACEMENT);
-    djgp_push_string(djp, "#define TEXTURETYPE_NORMAL %i\n", TEXTURETYPE_NORMAL);
-    djgp_push_string(djp, "#define TEXTURETYPE_AO %i\n", TEXTURETYPE_AO);
 
 
-    djgp_push_string(djp, "#define SHADING_DIFFUSE_AO %i\n", SHADING_DIFFUSE_AO);
-    djgp_push_string(djp, "#define SHADING_DIFFUSE %i\n", SHADING_DIFFUSE);
-    djgp_push_string(djp, "#define SHADING_NORMAL %i\n", SHADING_NORMAL);
     djgp_push_string(djp, "#define SHADING_BASECOLOR %i\n", SHADING_BASECOLOR);
     djgp_push_string(djp, "#define SHADING_DISPLACEMENT %i\n", SHADING_DISPLACEMENT);
-    djgp_push_string(djp, "#define SHADING_AO %i\n", SHADING_AO);
     djgp_push_string(djp, "#define SHADING_MODE %i\n", g_state.shadingMode);
 
 
@@ -1587,19 +1573,11 @@ void RenderViewer()
 
 
             const char* shading_mode_items[] = {
-                    "Diffuse + AO",
-                    "Diffuse",
                     "BaseColor",
-                    "Normal",
                     "Displacement",
-                    "AO"
             };
 
             if (ImGui::Combo("Shading", (int*)&g_state.shadingMode, shading_mode_items, sizeof(shading_mode_items)/sizeof(shading_mode_items[0]))) {
-                LoadPrograms();
-            }
-
-            if (ImGui::Checkbox("Disable Htex", &g_state.disableHtex)) {
                 LoadPrograms();
             }
         }
