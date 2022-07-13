@@ -138,7 +138,7 @@ void generateTexture(const cc_Mesh* mesh, int quadID, uint8_t* texels, int width
 
 int main(int argc, char** argv) {
     if (argc != 5) {
-        fprintf(stderr, "Usage: %s <ccm file> <texture file> <log2 resolution> <output path>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <ccm file> <texture file> <log2 resolution> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
         return 1;
     }
 
@@ -172,6 +172,8 @@ int main(int argc, char** argv) {
 
     const int width = 1 << log2_res;
     const int height = 1 << log2_res;
+
+    printf("Using a %ix%i texture for each quad\n", width, height);
 
     uint8_t* texels = new uint8_t[width*height*4];
     for (int quadID = 0; quadID < halfedge_mesh->edgeCount; quadID++) {
