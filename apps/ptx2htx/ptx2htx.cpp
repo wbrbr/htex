@@ -1,4 +1,3 @@
-#define STB_IMAGE_IMPLEMENTATION
 #include <vector>
 #include "Htexture.h"
 #include "Ptexture.h"

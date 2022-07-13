@@ -182,11 +182,14 @@ int main(int argc, char** argv) {
             fprintf(stderr, "Failed to write quad %d: %s\n", quadID, err.c_str());
             exit(1);
         }
+
+        if ((quadID + 1) % 100 == 0) {
+            printf("%i / %i\n", quadID+1, halfedge_mesh->edgeCount);
+        }
     }
 
     delete[] texels;
 
-    //writeHalfedgeMesh(writer, halfedge_mesh);
 
     if (!writer->close(err)) {
         fprintf(stderr, "Failed to write Htex file: %s\n", err.c_str());
