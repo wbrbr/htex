@@ -37,10 +37,6 @@ void StoreVertexTexels(int halfedgeID, vec4 color, int min_res)
     ivec2 log_corner_size = log_res - ivec2(min_res, min_res);
     ivec2 corner_size = ivec2(1) << log_corner_size;
 
-    /*if (ivec2(min_res) != log_res) {
-        color = vec4(0,1,0,1);
-    }*/
-
     for (int j = 0; j < corner_size.y; j++) {
         for (int i = 0; i < corner_size.x; i++) {
             ivec2 tex_coords = ivec2(size.x-1-i, j);
@@ -49,9 +45,6 @@ void StoreVertexTexels(int halfedgeID, vec4 color, int min_res)
             imageStore(edgeImage, tex_coords, color);
         }
     }
-
-    //ivec2 uv = (halfedgeID > twinID) ? ivec2(1,0) : ivec2(0,1);
-    //imageStore(edgeImage, uv*(size-1), color);
 }
 
 void main()
