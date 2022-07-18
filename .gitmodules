@@ -22,3 +22,6 @@
 [submodule "submodules/htex-api"]
 	path = submodules/htex-api
 	url = https://github.com/wbrbr/htex-api
+[submodule "submodules/embree"]
+	path = submodules/embree
+	url = https://github.com/embree/embree

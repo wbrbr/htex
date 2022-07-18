@@ -5,6 +5,8 @@ project(htex)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(BUILD_BAKER "Build the AO baker app (requires Embree)")
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
 endif()
@@ -44,6 +46,10 @@ include_directories(submodules/dj_opengl)
 include_directories(submodules/stb)
 include_directories(submodules/glm)
 include_directories(submodules/HalfedgeCatmullClark)
+
+set(EMBREE_ISPC_SUPPORT OFF CACHE BOOL "" FORCE)
+add_subdirectory(submodules/embree)
+include_directories(submodules/embree/include)
 
 # imgui source files
 set(IMGUI_SRC_DIR submodules/imgui)
@@ -92,6 +98,14 @@ aux_source_directory(${SRC_DIR} SRC_FILES)
 add_executable(${DEMO} ${SRC_FILES})
 target_include_directories(${DEMO} PRIVATE ${SRC_DIR})
 target_link_libraries(${DEMO} Htex_static)
+
+unset(SRC_FILES)
+set(DEMO aobaker)
+set(SRC_DIR apps/aobaker)
+aux_source_directory(${SRC_DIR} SRC_FILES)
+add_executable(${DEMO} ${SRC_FILES})
+target_include_directories(${DEMO} PRIVATE ${SRC_DIR})
+target_link_libraries(${DEMO} Htex_static embree)
 
 unset(DEMO)
 unset(SRC_FILES)
