@@ -66,11 +66,69 @@ glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
         res.x = (float)drand48()*2-1;
         res.y = (float)drand48()*2-1;
         res.z = (float)drand48()*2-1;
-    } while (glm::dot(res, res) > 1 || glm::dot(res, n) < 0);
+    } while (glm::dot(res, res) > 1 || abs(glm::dot(glm::normalize(res), n)) < 5e-2);
+
+    if (glm::dot(res, n) < 0) {
+        res *= -1;
+    }
+
     return glm::normalize(res);
 }
 
-void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom)
+float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
+{
+    float sum = 0;
+
+    RTCIntersectContext context;
+    rtcInitIntersectContext(&context);
+    context.flags = RTC_INTERSECT_CONTEXT_FLAG_COHERENT;
+
+
+    std::vector<glm::vec3> directions(sample_count);
+    for (int s = 0; s < sample_count; s++) {
+        directions[s] = RandomUnitVectorHemisphere(n);
+    }
+
+    for (int s = 0; s < sample_count; s++) {
+        RTCRayHit rayhit;
+        glm::vec3 dir = directions[s];
+
+        rayhit.ray.org_x = p.x;
+        rayhit.ray.org_y = p.y;
+        rayhit.ray.org_z = p.z;
+        rayhit.ray.dir_x = dir.x;
+        rayhit.ray.dir_y = dir.y;
+        rayhit.ray.dir_z = dir.z;
+        rayhit.ray.tnear = 1e-2;
+
+        rayhit.ray.tfar = INFINITY;
+        rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
+
+        rtcOccluded1(scene, &context, &rayhit.ray);
+        //rtcIntersect1(scene, &context, &rayhit);
+
+
+        if (rayhit.ray.tfar != -INFINITY) {
+            //if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) {
+            sum += 1;
+        } else {
+#if 0
+            printf("%f %f %f\n", dir.x,dir.y, dir.z);
+                    fprintf(stderr, "intersection: %f %f %f / %f %f %f\n", rayhit.ray.dir_x, rayhit.ray.dir_y, rayhit.ray.dir_z,
+                            n.x, n.y, n.z);
+                    fprintf(stderr, "%i / %i\n", halfedgeID, rayhit.hit.primID);
+                    //fprintf(stderr, "t: %f\n", rayhit.ray.tfar);
+                    fprintf(stderr, "%f\n\n", glm::dot(dir, n));
+#endif
+        }
+    }
+
+    float ao = sum / (float)sample_count;
+
+    return ao;
+}
+
+void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals)
 {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width-i; j++) {
@@ -86,96 +144,20 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
             float N[3];
 
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX, 0, P, 3);
+#if 0
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX_ATTRIBUTE, 0, N, 3);
-
             glm::vec3 n = glm::normalize(glm::vec3(N[0], N[1], N[2]));
+#else
+            glm::vec3 n = halfedgeNormals[halfedgeID];
+#endif
 
-            const int sample_count = 16;
-            int visible = 0;
+            glm::vec3 p(P[0], P[1], P[2]);
+            float ao = ComputeAO(p, n, 1000, scene);
 
-            RTCIntersectContext context;
-            rtcInitIntersectContext(&context);
-            context.flags = RTC_INTERSECT_CONTEXT_FLAG_COHERENT;
-
-
-            glm::vec3 dir_sum(0);
-//#pragma omp parallel for default(none) shared(sample_count, dir_sum, P, n, scene, visible)
-            for (int k = 0; k < sample_count / 16; k++) {
-                int valid[16];
-                for (int l = 0; l < 16; l++) {
-                    valid[l] = 16*k+l < sample_count ? -1 : 0;
-                }
-
-                RTCRay16 rays;
-                for (int l = 0; l < 16; l++) {
-                    glm::vec3 dir = RandomUnitVectorHemisphere(n);
-
-                    rays.org_x[l] = P[0];
-                    rays.org_y[l] = P[1];
-                    rays.org_z[l] = P[2];
-                    rays.dir_x[l] = dir.x;
-                    rays.dir_y[l] = dir.y;
-                    rays.dir_z[l] = dir.z;
-                    rays.tnear[l] = 1e-5;
-                    rays.tfar[l] = INFINITY;
-                }
-
-                rtcOccluded16(valid, scene, &context, &rays);
-
-                for (int l = 0; l < 16; l++) {
-                    if (rays.tfar[l] != -INFINITY) {
-                        visible++;
-                    }
-                }
-            }
-
-
-
-            /*if (rayhit.hit.geomID != RTC_INVALID_GEOMETRY_ID) {
-                quad_texels[4*px+0] = 0x00;
-                quad_texels[4*px+1] = 0x00;
-                quad_texels[4*px+2] = 0xff;
-                quad_texels[4*px+3] = 0xff;
-            } else {
-                quad_texels[4*px+0] = 0xff;
-                quad_texels[4*px+1] = 0x00;
-                quad_texels[4*px+2] = 0x00;
-                quad_texels[4*px+3] = 0xff;
-            }*/
-
-            dir_sum /= sample_count;
-            float ao = (float)visible / (float)sample_count;
-#if 1
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
             quad_texels[4*px+2] = (uint8_t)(ao*255.f);
             quad_texels[4*px+3] = 0xff;
-#elif 0
-            quad_texels[4*px+0] = (uint8_t)(fabs(dir_sum.x)*255.f);
-            quad_texels[4*px+1] = (uint8_t)(fabs(dir_sum.y)*255.f);
-            quad_texels[4*px+2] = (uint8_t)(fabs(dir_sum.z)*255.f);
-            quad_texels[4*px+3] = 0xff;
-#elif 0
-            quad_texels[4*px+0] = 0xff;
-            quad_texels[4*px+1] = 0x00;
-            quad_texels[4*px+2] = 0x00;
-            quad_texels[4*px+3] = 0xff;
-#elif 0
-            quad_texels[4*px+0] = (uint8_t)glm::clamp(p.x * 255, 0.f, 255.f);
-            quad_texels[4*px+1] = (uint8_t)glm::clamp(p.y * 255, 0.f, 255.f);
-            quad_texels[4*px+2] = (uint8_t)glm::clamp(p.z * 255, 0.f, 255.f);
-            quad_texels[4*px+3] = 0xff;
-#elif 0
-            quad_texels[4*px+0] = (uint8_t)(u*255.f);
-            quad_texels[4*px+1] = (uint8_t)(v*255.f);
-            quad_texels[4*px+2] = 0;
-            quad_texels[4*px+3] = 0xff;
-#elif 0
-            quad_texels[4*px+0] = (uint8_t)glm::clamp(N[0]*255.f, 0.f, 255.f);
-            quad_texels[4*px+1] = (uint8_t)glm::clamp(N[1]*255.f, 0.f, 255.f);
-            quad_texels[4*px+2] = (uint8_t)glm::clamp(N[2]*255.f, 0.f, 255.f);
-            quad_texels[4*px+3] = 0xff;
-#endif
         }
     }
 }
@@ -191,6 +173,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Usage: %s <ccm file> <log2 resolution> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
         return 1;
     }
+
+    srand48(123456789);
 
     const char* ccmPath = argv[1];
     int log2_res = atoi(argv[2]);
@@ -292,39 +276,47 @@ int main(int argc, char** argv) {
     rtcReleaseGeometry(geom);
     rtcCommitScene(scene);
 
-    uint8_t* texels = new uint8_t[width*height*4];
-    for (int i = 0; i < width*height; i++) {
-        texels[4*i+0] = 0x00;
-        texels[4*i+1] = 0xff;
-        texels[4*i+2] = 0x00;
-        texels[4*i+3] = 0xff;
+
+    int done = 0;
+
+    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 100000, scene));
+    return 0;
+
+#pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals) private(err)
+    {
+        std::vector<uint8_t> texels(width*height*4);
+
+#pragma omp for
+        for (int quadID = 0; quadID < halfedge_mesh->edgeCount; quadID++) {
+            int halfedge1 = ccm_EdgeToHalfedgeID(halfedge_mesh, quadID);
+            int halfedge2 = ccm_HalfedgeTwinID(halfedge_mesh, halfedge1);
+            int halfedge_max = (halfedge1 > halfedge2) ? halfedge1 : halfedge2;
+            int halfedge_min = (halfedge1 < halfedge2) ? halfedge1 : halfedge2;
+
+            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data());
+            if (halfedge_min >= 0) {
+                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data());
+            } else {
+                // TODO
+            }
+
+            Htex::QuadInfo quadInfo{Htex::Res(log2_res, log2_res), quadID};
+
+#pragma omp critical
+            if (!writer->writeQuad(quadID, quadInfo, texels.data())) {
+                writer->close(err);
+                fprintf(stderr, "Failed to write quad %d: %s\n", quadID, err.c_str());
+                exit(1);
+            }
+
+#pragma omp atomic
+            done++;
+
+            if ((done+1) % 100 == 0) {
+                printf("%i / %i\n", done+1, halfedge_mesh->edgeCount);
+            }
+        }
     }
-    for (int quadID = 0; quadID < halfedge_mesh->edgeCount; quadID++) {
-        int halfedge1 = ccm_EdgeToHalfedgeID(halfedge_mesh, quadID);
-        int halfedge2 = ccm_HalfedgeTwinID(halfedge_mesh, halfedge1);
-        int halfedge_max = (halfedge1 > halfedge2) ? halfedge1 : halfedge2;
-        int halfedge_min = (halfedge1 < halfedge2) ? halfedge1 : halfedge2;
-
-        GenerateTexture(halfedge_mesh, halfedge_max, texels, width, height, true, scene, geom);
-        if (halfedge_min >= 0) {
-            GenerateTexture(halfedge_mesh, halfedge_min, texels, width, height, false, scene, geom);
-        } else {
-            // TODO
-        }
-
-        Htex::QuadInfo quadInfo{Htex::Res(log2_res, log2_res), quadID};
-        if (!writer->writeQuad(quadID, quadInfo, texels)) {
-            writer->close(err);
-            fprintf(stderr, "Failed to write quad %d: %s\n", quadID, err.c_str());
-            exit(1);
-        }
-
-        if ((quadID + 1) % 100 == 0) {
-            printf("%i / %i\n", quadID+1, halfedge_mesh->edgeCount);
-        }
-    }
-
-    delete[] texels;
 
 
     if (!writer->close(err)) {
