@@ -61,7 +61,7 @@ glm::vec3 ComputeFacePointNormal(cc_Mesh* mesh, int faceID, const std::vector<gl
 
 void OrthonormalBasis(glm::vec3 n, glm::vec3& b1, glm::vec3& b2)
 {
-    if (glm::dot(n, glm::vec3(0,1,0)) > 0.9) {
+    if (fabs(n.y) > 0.9) {
         b1 = glm::normalize(glm::cross(n, glm::vec3(1,0,0)));
     } else {
         b1 = glm::normalize(glm::cross(n, glm::vec3(0,1,0)));
@@ -69,12 +69,13 @@ void OrthonormalBasis(glm::vec3 n, glm::vec3& b1, glm::vec3& b2)
 
     b2 = glm::normalize(glm::cross(n, b1));
 
-    assert(fabs(glm::dot(b1, n)) < 1e-5);
-    assert(fabs(glm::dot(b2, n)) < 1e-5);
-    assert(fabs(glm::dot(b1, b2)) < 1e-5);
-    assert(fabs(glm::length(n) - 1) < 1e-5);
-    assert(fabs(glm::length(b1) -1) < 1e-5);
-    assert(fabs(glm::length(b2) - 1) < 1e-5);
+    float eps = 1e-5;
+    assert(fabs(glm::dot(b1, n)) < eps);
+    assert(fabs(glm::dot(b2, n)) < eps);
+    assert(fabs(glm::dot(b1, b2)) < eps);
+    assert(fabs(glm::length(n) - 1) < eps);
+    assert(fabs(glm::length(b1) -1) < eps);
+    assert(fabs(glm::length(b2) - 1) < eps);
 }
 
 glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n)
@@ -205,9 +206,24 @@ void embree_error(void* userPtr, RTCError code, const char* str)
     exit(1);
 }
 
+bool StrEndsWith(const char* str, const char* substr)
+{
+    unsigned int len_substr = strlen(substr);
+    unsigned int len_str = strlen(str);
+
+    if (len_str < len_substr) return false;
+
+    for (unsigned int i = 0; i < len_substr; i++) {
+        if (str[len_str-1-i] != substr[len_substr-1-i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
 int main(int argc, char** argv) {
     if (argc != 4) {
-        fprintf(stderr, "Usage: %s <ccm file> <log2 resolution> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
+        fprintf(stderr, "Usage: %s <input mesh (.ccm/.htx)> <log2 resolution> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
         return 1;
     }
 
@@ -221,7 +237,26 @@ int main(int argc, char** argv) {
     }
     const char* outputPath = argv[3];
 
-    cc_Mesh* halfedge_mesh = ccm_Load(ccmPath);
+    cc_Mesh* halfedge_mesh;
+    if (StrEndsWith(ccmPath, ".ccm")) {
+        halfedge_mesh = ccm_Load(ccmPath);
+        if (!halfedge_mesh) {
+            fprintf(stderr, "Failed to load .ccm\n");
+            return 1;
+        }
+    } else if (StrEndsWith(ccmPath, ".htx")) {
+        Htex::String err;
+        HtexTexture* inputHtex = HtexTexture::open(ccmPath, err);
+        if (inputHtex) {
+            halfedge_mesh = inputHtex->getHalfedgeMesh();
+        } else {
+            fprintf(stderr, "Failed to load Htex file: %s\n", err.c_str());
+            return 1;
+        }
+    } else {
+        fprintf(stderr, "%s: unknown file format\n", ccmPath);
+        return 1;
+    }
 
     Htex::String err;
     HtexWriter* writer = HtexWriter::open(outputPath, halfedge_mesh, Htex::mt_quad, Htex::dt_uint8, 4, 3, err);
