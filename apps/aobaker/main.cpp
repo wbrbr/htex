@@ -119,32 +119,25 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
     context.flags = RTC_INTERSECT_CONTEXT_FLAG_COHERENT;
 
 
+    std::vector<RTCRay> rays(sample_count);
     std::vector<glm::vec3> directions(sample_count);
     for (int s = 0; s < sample_count; s++) {
         //directions[s] = RandomUnitVectorHemisphere(n);
-        directions[s] = RandomCosineWeightedHemisphere(n);
+        glm::vec3 dir = RandomCosineWeightedHemisphere(n);
+        rays[s].org_x = p.x;
+        rays[s].org_y = p.y;
+        rays[s].org_z = p.z;
+        rays[s].dir_x = dir.x;
+        rays[s].dir_y = dir.y;
+        rays[s].dir_z = dir.z;
+        rays[s].tnear = 1e-2;
+        rays[s].tfar = INFINITY;
     }
 
+    rtcOccluded1M(scene, &context, rays.data(), sample_count, sizeof(RTCRay));
+
     for (int s = 0; s < sample_count; s++) {
-        RTCRayHit rayhit;
-        glm::vec3 dir = directions[s];
-
-        rayhit.ray.org_x = p.x;
-        rayhit.ray.org_y = p.y;
-        rayhit.ray.org_z = p.z;
-        rayhit.ray.dir_x = dir.x;
-        rayhit.ray.dir_y = dir.y;
-        rayhit.ray.dir_z = dir.z;
-        rayhit.ray.tnear = 1e-2;
-
-        rayhit.ray.tfar = INFINITY;
-        rayhit.hit.geomID = RTC_INVALID_GEOMETRY_ID;
-
-        rtcOccluded1(scene, &context, &rayhit.ray);
-        //rtcIntersect1(scene, &context, &rayhit);
-
-
-        if (rayhit.ray.tfar != -INFINITY) {
+        if (rays[s].tfar != -INFINITY) {
             //if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) {
             sum += 1;
             /*double pdf = 0.5f / M_PI;
@@ -190,7 +183,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
 #endif
 
             glm::vec3 p(P[0], P[1], P[2]);
-            float ao = ComputeAO(p, n, 160, scene);
+            float ao = ComputeAO(p, n, 1000, scene);
 
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
