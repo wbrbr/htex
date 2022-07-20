@@ -59,6 +59,39 @@ glm::vec3 ComputeFacePointNormal(cc_Mesh* mesh, int faceID, const std::vector<gl
     return glm::normalize(n);
 }
 
+void OrthonormalBasis(glm::vec3 n, glm::vec3& b1, glm::vec3& b2)
+{
+    if (glm::dot(n, glm::vec3(0,1,0)) > 0.9) {
+        b1 = glm::normalize(glm::cross(n, glm::vec3(1,0,0)));
+    } else {
+        b1 = glm::normalize(glm::cross(n, glm::vec3(0,1,0)));
+    }
+
+    b2 = glm::normalize(glm::cross(n, b1));
+
+    assert(fabs(glm::dot(b1, n)) < 1e-5);
+    assert(fabs(glm::dot(b2, n)) < 1e-5);
+    assert(fabs(glm::dot(b1, b2)) < 1e-5);
+    assert(fabs(glm::length(n) - 1) < 1e-5);
+    assert(fabs(glm::length(b1) -1) < 1e-5);
+    assert(fabs(glm::length(b2) - 1) < 1e-5);
+}
+
+glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n)
+{
+    glm::vec3 b1, b2;
+    OrthonormalBasis(n, b1, b2);
+
+    float theta = 2.f*(float)M_PI*(float)drand48();
+    float r = sqrtf((float)drand48());
+
+    float x = r*cosf(theta);
+    float y = r*sinf(theta);
+    float z = sqrtf(1-r*r);
+
+    return x*b1 + y*b2 + z*n;
+}
+
 glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
 {
     glm::vec3 res;
@@ -87,7 +120,8 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
 
     std::vector<glm::vec3> directions(sample_count);
     for (int s = 0; s < sample_count; s++) {
-        directions[s] = RandomUnitVectorHemisphere(n);
+        //directions[s] = RandomUnitVectorHemisphere(n);
+        directions[s] = RandomCosineWeightedHemisphere(n);
     }
 
     for (int s = 0; s < sample_count; s++) {
@@ -111,16 +145,15 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
 
         if (rayhit.ray.tfar != -INFINITY) {
             //if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) {
-            //sum += 1;
-            double pdf = 0.5f / M_PI;
+            sum += 1;
+            /*double pdf = 0.5f / M_PI;
             double val = glm::dot(dir, n) / (float)M_PI;
-            sum += val / pdf;
+            sum += val / pdf;*/
         } else {
 #if 0
             printf("%f %f %f\n", dir.x,dir.y, dir.z);
                     fprintf(stderr, "intersection: %f %f %f / %f %f %f\n", rayhit.ray.dir_x, rayhit.ray.dir_y, rayhit.ray.dir_z,
                             n.x, n.y, n.z);
-                    fprintf(stderr, "%i / %i\n", halfedgeID, rayhit.hit.primID);
                     //fprintf(stderr, "t: %f\n", rayhit.ray.tfar);
                     fprintf(stderr, "%f\n\n", glm::dot(dir, n));
 #endif
@@ -156,7 +189,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
 #endif
 
             glm::vec3 p(P[0], P[1], P[2]);
-            float ao = ComputeAO(p, n, 1000, scene);
+            float ao = ComputeAO(p, n, 160, scene);
 
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
@@ -285,8 +318,8 @@ int main(int argc, char** argv) {
 
     // ground truth: 1/sqrt(2) (approx. 0.707) (without cosine term)
     //               1/2 (with cosine term)
-    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 1e8, scene));
-    return 0;
+    //printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 1e7, scene));
+    //return 0;
 
 #pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals) private(err)
     {
