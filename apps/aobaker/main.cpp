@@ -2,6 +2,8 @@
 #include "Htexture.h"
 #include "glm/glm.hpp"
 #include <vector>
+#include <omp.h>
+#include "rank1.hpp"
 
 glm::vec3 FaceBarycenter(cc_Mesh* mesh, int faceID)
 {
@@ -78,13 +80,14 @@ void OrthonormalBasis(glm::vec3 n, glm::vec3& b1, glm::vec3& b2)
     assert(fabs(glm::length(b2) - 1) < eps);
 }
 
-glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n)
+glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n, std::mt19937& gen)
 {
+    std::uniform_real_distribution<float> dist(0.f, 1.f);
     glm::vec3 b1, b2;
     OrthonormalBasis(n, b1, b2);
 
-    float theta = 2.f*(float)M_PI*(float)drand48();
-    float r = sqrtf((float)drand48());
+    float theta = 2.f*(float)M_PI*dist(gen);
+    float r = sqrtf(dist(gen));
 
     float x = r*cosf(theta);
     float y = r*sinf(theta);
@@ -93,13 +96,14 @@ glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n)
     return x*b1 + y*b2 + z*n;
 }
 
-glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
+glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n, std::mt19937& gen)
 {
+    std::uniform_real_distribution<float> dist(0.f, 1.f);
     glm::vec3 res;
     do {
-        res.x = (float)drand48()*2-1;
-        res.y = (float)drand48()*2-1;
-        res.z = (float)drand48()*2-1;
+        res.x = dist(gen)*2-1;
+        res.y = dist(gen)*2-1;
+        res.z = dist(gen)*2-1;
     //} while (glm::dot(res, res) > 1 || abs(glm::dot(glm::normalize(res), n)) < 5e-2);
     } while (glm::dot(res, res) > 1);
 
@@ -110,7 +114,7 @@ glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
     return glm::normalize(res);
 }
 
-float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
+float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, std::mt19937& gen)
 {
     double sum = 0;
 
@@ -123,7 +127,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
     std::vector<glm::vec3> directions(sample_count);
     for (int s = 0; s < sample_count; s++) {
         //directions[s] = RandomUnitVectorHemisphere(n);
-        glm::vec3 dir = RandomCosineWeightedHemisphere(n);
+        glm::vec3 dir = RandomCosineWeightedHemisphere(n, gen);
         rays[s].org_x = p.x;
         rays[s].org_y = p.y;
         rays[s].org_z = p.z;
@@ -159,7 +163,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
     return ao;
 }
 
-void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals)
+void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals, int sample_count, std::mt19937& gen)
 {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width-i; j++) {
@@ -183,7 +187,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
 #endif
 
             glm::vec3 p(P[0], P[1], P[2]);
-            float ao = ComputeAO(p, n, 1000, scene);
+            float ao = ComputeAO(p, n, sample_count, scene, gen);
 
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
@@ -215,20 +219,25 @@ bool StrEndsWith(const char* str, const char* substr)
     return true;
 }
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        fprintf(stderr, "Usage: %s <input mesh (.ccm/.htx)> <log2 resolution> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <input mesh (.ccm/.htx)> <log2 resolution> <sample count> <output path>\nYou can use the obj_to_ccm program to generate a .ccm from a .obj file\n", argv[0]);
         return 1;
     }
 
     srand48(123456789);
 
     const char* ccmPath = argv[1];
-    int log2_res = atoi(argv[2]);
+    const int log2_res = atoi(argv[2]);
     if (log2_res <= 0 || log2_res > 255) {
         fprintf(stderr, "Invalid resolution\n");
         return 1;
     }
-    const char* outputPath = argv[3];
+    const int sample_count = atoi(argv[3]);
+    if (sample_count <= 0) {
+        fprintf(stderr, "Invalid sample count\n");
+        return 1;
+    }
+    const char* outputPath = argv[4];
 
     cc_Mesh* halfedge_mesh;
     if (StrEndsWith(ccmPath, ".ccm")) {
@@ -341,7 +350,6 @@ int main(int argc, char** argv) {
     rtcReleaseGeometry(geom);
     rtcCommitScene(scene);
 
-
     int done = 0;
 
     // ground truth: 1/sqrt(2) (approx. 0.707) (without cosine term)
@@ -349,9 +357,10 @@ int main(int argc, char** argv) {
     //printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 1e7, scene));
     //return 0;
 
-#pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals) private(err)
+#pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals, sample_count) private(err)
     {
         std::vector<uint8_t> texels(width*height*4);
+        std::mt19937 gen(1+omp_get_thread_num());
 
 #pragma omp for
         for (int quadID = 0; quadID < halfedge_mesh->edgeCount; quadID++) {
@@ -360,9 +369,9 @@ int main(int argc, char** argv) {
             int halfedge_max = (halfedge1 > halfedge2) ? halfedge1 : halfedge2;
             int halfedge_min = (halfedge1 < halfedge2) ? halfedge1 : halfedge2;
 
-            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data());
+            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data(), sample_count, gen);
             if (halfedge_min >= 0) {
-                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data());
+                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data(), sample_count, gen);
             } else {
                 // TODO
             }
