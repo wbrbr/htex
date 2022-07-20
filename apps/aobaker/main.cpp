@@ -66,7 +66,8 @@ glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
         res.x = (float)drand48()*2-1;
         res.y = (float)drand48()*2-1;
         res.z = (float)drand48()*2-1;
-    } while (glm::dot(res, res) > 1 || abs(glm::dot(glm::normalize(res), n)) < 5e-2);
+    //} while (glm::dot(res, res) > 1 || abs(glm::dot(glm::normalize(res), n)) < 5e-2);
+    } while (glm::dot(res, res) > 1);
 
     if (glm::dot(res, n) < 0) {
         res *= -1;
@@ -77,7 +78,7 @@ glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n)
 
 float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
 {
-    float sum = 0;
+    double sum = 0;
 
     RTCIntersectContext context;
     rtcInitIntersectContext(&context);
@@ -110,7 +111,10 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
 
         if (rayhit.ray.tfar != -INFINITY) {
             //if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) {
-            sum += 1;
+            //sum += 1;
+            double pdf = 0.5f / M_PI;
+            double val = glm::dot(dir, n) / (float)M_PI;
+            sum += val / pdf;
         } else {
 #if 0
             printf("%f %f %f\n", dir.x,dir.y, dir.z);
@@ -123,7 +127,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene)
         }
     }
 
-    float ao = sum / (float)sample_count;
+    float ao = (float)(glm::clamp(sum / (double)sample_count, 0., 1.));
 
     return ao;
 }
@@ -144,7 +148,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
             float N[3];
 
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX, 0, P, 3);
-#if 0
+#if 1
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX_ATTRIBUTE, 0, N, 3);
             glm::vec3 n = glm::normalize(glm::vec3(N[0], N[1], N[2]));
 #else
@@ -279,7 +283,9 @@ int main(int argc, char** argv) {
 
     int done = 0;
 
-    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 100000, scene));
+    // ground truth: 1/sqrt(2) (approx. 0.707) (without cosine term)
+    //               1/2 (with cosine term)
+    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 1e8, scene));
     return 0;
 
 #pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals) private(err)
