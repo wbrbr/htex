@@ -80,14 +80,20 @@ void OrthonormalBasis(glm::vec3 n, glm::vec3& b1, glm::vec3& b2)
     assert(fabs(glm::length(b2) - 1) < eps);
 }
 
-glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n, std::mt19937& gen)
+struct Rng {
+    rank1 rnk;
+    float shift_u;
+    float shift_v;
+};
+
+glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n, Rng& rng, int s)
 {
     std::uniform_real_distribution<float> dist(0.f, 1.f);
     glm::vec3 b1, b2;
     OrthonormalBasis(n, b1, b2);
 
-    float theta = 2.f*(float)M_PI*dist(gen);
-    float r = sqrtf(dist(gen));
+    float theta = 2.f * (float)M_PI * rng.rnk.rank1_float(s, 0, rng.shift_u);
+    float r = sqrtf(rng.rnk.rank1_float(s, 1, rng.shift_v));
 
     float x = r*cosf(theta);
     float y = r*sinf(theta);
@@ -96,25 +102,7 @@ glm::vec3 RandomCosineWeightedHemisphere(glm::vec3 n, std::mt19937& gen)
     return x*b1 + y*b2 + z*n;
 }
 
-glm::vec3 RandomUnitVectorHemisphere(glm::vec3 n, std::mt19937& gen)
-{
-    std::uniform_real_distribution<float> dist(0.f, 1.f);
-    glm::vec3 res;
-    do {
-        res.x = dist(gen)*2-1;
-        res.y = dist(gen)*2-1;
-        res.z = dist(gen)*2-1;
-    //} while (glm::dot(res, res) > 1 || abs(glm::dot(glm::normalize(res), n)) < 5e-2);
-    } while (glm::dot(res, res) > 1);
-
-    if (glm::dot(res, n) < 0) {
-        res *= -1;
-    }
-
-    return glm::normalize(res);
-}
-
-float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, std::mt19937& gen)
+float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, Rng& rng)
 {
     double sum = 0;
 
@@ -126,8 +114,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, std:
     std::vector<RTCRay> rays(sample_count);
     std::vector<glm::vec3> directions(sample_count);
     for (int s = 0; s < sample_count; s++) {
-        //directions[s] = RandomUnitVectorHemisphere(n);
-        glm::vec3 dir = RandomCosineWeightedHemisphere(n, gen);
+        glm::vec3 dir = RandomCosineWeightedHemisphere(n, rng, s);
         rays[s].org_x = p.x;
         rays[s].org_y = p.y;
         rays[s].org_z = p.z;
@@ -142,11 +129,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, std:
 
     for (int s = 0; s < sample_count; s++) {
         if (rays[s].tfar != -INFINITY) {
-            //if (rayhit.hit.geomID == RTC_INVALID_GEOMETRY_ID) {
             sum += 1;
-            /*double pdf = 0.5f / M_PI;
-            double val = glm::dot(dir, n) / (float)M_PI;
-            sum += val / pdf;*/
         } else {
 #if 0
             printf("%f %f %f\n", dir.x,dir.y, dir.z);
@@ -163,7 +146,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, std:
     return ao;
 }
 
-void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals, int sample_count, std::mt19937& gen)
+void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals, int sample_count, Rng& rng)
 {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width-i; j++) {
@@ -187,7 +170,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
 #endif
 
             glm::vec3 p(P[0], P[1], P[2]);
-            float ao = ComputeAO(p, n, sample_count, scene, gen);
+            float ao = ComputeAO(p, n, sample_count, scene, rng);
 
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
@@ -361,6 +344,11 @@ int main(int argc, char** argv) {
     {
         std::vector<uint8_t> texels(width*height*4);
         std::mt19937 gen(1+omp_get_thread_num());
+        Rng rng;
+        rng.rnk = rank1();
+        std::uniform_real_distribution<float> dist(0,1);
+        rng.shift_u = dist(gen);
+        rng.shift_v = dist(gen);
 
 #pragma omp for
         for (int quadID = 0; quadID < halfedge_mesh->edgeCount; quadID++) {
@@ -369,9 +357,9 @@ int main(int argc, char** argv) {
             int halfedge_max = (halfedge1 > halfedge2) ? halfedge1 : halfedge2;
             int halfedge_min = (halfedge1 < halfedge2) ? halfedge1 : halfedge2;
 
-            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data(), sample_count, gen);
+            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data(), sample_count, rng);
             if (halfedge_min >= 0) {
-                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data(), sample_count, gen);
+                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data(), sample_count, rng);
             } else {
                 // TODO
             }
