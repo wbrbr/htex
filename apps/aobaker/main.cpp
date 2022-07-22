@@ -25,13 +25,13 @@ glm::vec3 FaceBarycenter(cc_Mesh* mesh, int faceID)
     return sum;
 }
 
-glm::vec3 ComputeVertexNormal(cc_Mesh* mesh, int vertexID, const std::vector<glm::vec3>& halfedgeNormals)
+glm::vec3 ComputeVertexNormal(cc_Mesh* mesh, int vertexID, const std::vector<glm::vec3>& halfedgeNormals, const std::vector<float>& halfedgeAreas)
 {
     int startHalfedge = ccm_VertexPointToHalfedgeID(mesh, vertexID);
     glm::vec3 n = glm::vec3(0);
     int currentHEdge = startHalfedge;
     do {
-        n += halfedgeNormals[currentHEdge];
+        n += halfedgeNormals[currentHEdge] * halfedgeAreas[currentHEdge];
         currentHEdge = ccm_HalfedgeTwinID(mesh, currentHEdge);
         if (currentHEdge < 0) break;
         currentHEdge = ccm_HalfedgeNextID(mesh, currentHEdge);
@@ -49,13 +49,13 @@ glm::vec3 ComputeVertexNormal(cc_Mesh* mesh, int vertexID, const std::vector<glm
     return glm::normalize(n);
 }
 
-glm::vec3 ComputeFacePointNormal(cc_Mesh* mesh, int faceID, const std::vector<glm::vec3>& halfedgeNormals)
+glm::vec3 ComputeFacePointNormal(cc_Mesh* mesh, int faceID, const std::vector<glm::vec3>& halfedgeNormals, const std::vector<float>& halfedgeAreas)
 {
     int startHalfedge = ccm_FaceToHalfedgeID(mesh, faceID);
     glm::vec3 n = glm::vec3(0);
     int currentHEdge = startHalfedge;
     do {
-        n += ComputeVertexNormal(mesh, ccm_HalfedgeVertexID(mesh, currentHEdge), halfedgeNormals);
+        n += ComputeVertexNormal(mesh, ccm_HalfedgeVertexID(mesh, currentHEdge), halfedgeNormals, halfedgeAreas);
         currentHEdge = ccm_HalfedgeNextID(mesh, currentHEdge);
     } while(currentHEdge != startHalfedge);
     return glm::normalize(n);
@@ -172,10 +172,17 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
             glm::vec3 p(P[0], P[1], P[2]);
             float ao = ComputeAO(p, n, sample_count, scene, rng);
 
+#if 0
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
             quad_texels[4*px+2] = (uint8_t)(ao*255.f);
             quad_texels[4*px+3] = 0xff;
+#else
+            quad_texels[4*px+0] = (uint8_t)(fabs(n.x)*255.f);
+            quad_texels[4*px+1] = (uint8_t)(fabs(n.y)*255.f);
+            quad_texels[4*px+2] = (uint8_t)(fabs(n.z)*255.f);
+            quad_texels[4*px+3] = 0xff;
+#endif
         }
     }
 }
@@ -296,6 +303,7 @@ int main(int argc, char** argv) {
 
 
     std::vector<glm::vec3> halfedgeNormals(ccm_HalfedgeCount(halfedge_mesh));
+    std::vector<float> halfedgeAreas(ccm_HalfedgeCount(halfedge_mesh));
     for (int halfedgeID = 0; halfedgeID < ccm_HalfedgeCount(halfedge_mesh); halfedgeID++) {
         glm::vec3 vertices[3];
         for (int k = 0; k < 3; k++) {
@@ -303,8 +311,9 @@ int main(int argc, char** argv) {
             vertices[k] = glm::vec3(vertexBuffer[3*vid+0], vertexBuffer[3*vid+1], vertexBuffer[3*vid+2]);
         }
 
-        glm::vec3 n = glm::normalize(glm::cross(vertices[1]-vertices[0], vertices[2]-vertices[0]));
-        halfedgeNormals[halfedgeID] = n;
+        glm::vec3 cross = glm::cross(vertices[1]-vertices[0], vertices[2]-vertices[0]);
+        halfedgeNormals[halfedgeID] = glm::normalize(cross);
+        halfedgeAreas[halfedgeID] = 0.5f * glm::length(cross);
     }
 
     rtcSetGeometryVertexAttributeCount(geom, 1);
@@ -315,13 +324,13 @@ int main(int argc, char** argv) {
                                                            3*sizeof(float),
                                                            ccm_VertexCount(halfedge_mesh) + ccm_FaceCount(halfedge_mesh));
     for (int vid = 0; vid < ccm_VertexCount(halfedge_mesh); vid++) {
-        glm::vec3 n = ComputeVertexNormal(halfedge_mesh, vid, halfedgeNormals);
+        glm::vec3 n = ComputeVertexNormal(halfedge_mesh, vid, halfedgeNormals, halfedgeAreas);
         normalBuffer[3*vid+0] = n.x;
         normalBuffer[3*vid+1] = n.y;
         normalBuffer[3*vid+2] = n.z;
     }
     for (int faceid = 0; faceid < ccm_FaceCount(halfedge_mesh); faceid++) {
-        glm::vec3 n = ComputeFacePointNormal(halfedge_mesh, faceid, halfedgeNormals);
+        glm::vec3 n = ComputeFacePointNormal(halfedge_mesh, faceid, halfedgeNormals, halfedgeAreas);
         int idx = halfedge_mesh->vertexCount + faceid;
         normalBuffer[3*idx+0] = n.x;
         normalBuffer[3*idx+1] = n.y;
@@ -335,10 +344,18 @@ int main(int argc, char** argv) {
 
     int done = 0;
 
-    // ground truth: 1/sqrt(2) (approx. 0.707) (without cosine term)
-    //               1/2 (with cosine term)
-    //printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), 1e7, scene));
-    //return 0;
+
+#if 0
+    std::mt19937 gen(1);
+    Rng rng;
+    rng.rnk = rank1();
+    std::uniform_real_distribution<float> dist(0,1);
+    rng.shift_u = dist(gen);
+    rng.shift_v = dist(gen);
+    // ground truth: 1/2
+    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), sample_count, scene, rng));
+    return 0;
+#endif
 
 #pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals, sample_count) private(err)
     {
