@@ -121,7 +121,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, Rng&
         rays[s].dir_x = dir.x;
         rays[s].dir_y = dir.y;
         rays[s].dir_z = dir.z;
-        rays[s].tnear = 1e-2;
+        rays[s].tnear = 1e-4; // same epsilon as mitsuba
         rays[s].tfar = INFINITY;
     }
 
@@ -172,7 +172,7 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
             glm::vec3 p(P[0], P[1], P[2]);
             float ao = ComputeAO(p, n, sample_count, scene, rng);
 
-#if 0
+#if 1
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
             quad_texels[4*px+2] = (uint8_t)(ao*255.f);
@@ -378,7 +378,19 @@ int main(int argc, char** argv) {
             if (halfedge_min >= 0) {
                 GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data(), sample_count, rng);
             } else {
-                // TODO
+                for (int i = 0; i < height; i++) {
+                    for (int j = width-i; j < height; j++) {
+                        int mirror_i = height-1-i;
+                        int mirror_j = width-1-j;
+
+                        int px = i*width+j;
+                        int mirror_px = mirror_i*width+mirror_j;
+                        texels[4*px+0] = texels[4*mirror_px+0];
+                        texels[4*px+1] = texels[4*mirror_px+1];t
+                        texels[4*px+2] = texels[4*mirror_px+2];
+                        texels[4*px+3] = texels[4*mirror_px+3];
+                    }
+                }
             }
 
             Htex::QuadInfo quadInfo{Htex::Res(log2_res, log2_res), quadID};
