@@ -205,7 +205,6 @@ void main()
         int wi = int(round(w*u_TessFactor));
         int idx = (3*i_Patch.halfedgeID+2) * int(u_TessFactor)+ wi;
         u_OutputVertices[idx] = vertexPoint;
-        //u_OutputVertices[idx] = vec4(displacement);
     } else if (v == 0) {
         // edge 0-1
         int ui = int(round(u*u_TessFactor));
@@ -232,7 +231,7 @@ layout (location = 0) flat in int i_HalfedgeID[];
 layout(location = 1) in vec2 i_VertexUV[];
 layout(location = 2) in vec3 i_VertexPosition[];
 layout (location = 0) flat out int o_HalfedgeID;
-layout(location = 1) flat out vec2 o_VertexUV;
+layout(location = 1) out vec2 o_VertexUV;
 layout (location = 2) noperspective out vec3 o_Distance;
 layout(location = 3) out vec3 o_VertexNormal;
 
@@ -264,7 +263,7 @@ void main()
 
 #ifdef FRAGMENT_SHADER
 layout (location = 0) flat in int i_HalfedgeID;
-layout(location = 1) in vec2 i_FragmentUV;
+layout(location = 1) centroid in vec2 i_FragmentUV;
 layout (location = 2) noperspective in vec3 i_Distance;
 layout(location = 3) in vec3 i_FragmentNormal;
 layout (location = 0) out vec4 o_FragmentColor;
