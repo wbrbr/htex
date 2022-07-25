@@ -386,7 +386,7 @@ int main(int argc, char** argv) {
                         int px = i*width+j;
                         int mirror_px = mirror_i*width+mirror_j;
                         texels[4*px+0] = texels[4*mirror_px+0];
-                        texels[4*px+1] = texels[4*mirror_px+1];t
+                        texels[4*px+1] = texels[4*mirror_px+1];
                         texels[4*px+2] = texels[4*mirror_px+2];
                         texels[4*px+3] = texels[4*mirror_px+3];
                     }
