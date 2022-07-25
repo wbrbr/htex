@@ -130,14 +130,6 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, Rng&
     for (int s = 0; s < sample_count; s++) {
         if (rays[s].tfar != -INFINITY) {
             sum += 1;
-        } else {
-#if 0
-            printf("%f %f %f\n", dir.x,dir.y, dir.z);
-                    fprintf(stderr, "intersection: %f %f %f / %f %f %f\n", rayhit.ray.dir_x, rayhit.ray.dir_y, rayhit.ray.dir_z,
-                            n.x, n.y, n.z);
-                    //fprintf(stderr, "t: %f\n", rayhit.ray.tfar);
-                    fprintf(stderr, "%f\n\n", glm::dot(dir, n));
-#endif
         }
     }
 
@@ -146,7 +138,7 @@ float ComputeAO(glm::vec3 p, glm::vec3 n, int sample_count, RTCScene scene, Rng&
     return ao;
 }
 
-void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, glm::vec3* halfedgeNormals, int sample_count, Rng& rng)
+void GenerateTexture(int halfedgeID, uint8_t* quad_texels, int width, int height, bool is_max_halfedge, RTCScene scene, RTCGeometry geom, int sample_count, Rng& rng)
 {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width-i; j++) {
@@ -162,27 +154,16 @@ void GenerateTexture(cc_Mesh* mesh, int halfedgeID, uint8_t* quad_texels, int wi
             float N[3];
 
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX, 0, P, 3);
-#if 1
             rtcInterpolate0(geom, halfedgeID, u, v, RTC_BUFFER_TYPE_VERTEX_ATTRIBUTE, 0, N, 3);
             glm::vec3 n = glm::normalize(glm::vec3(N[0], N[1], N[2]));
-#else
-            glm::vec3 n = halfedgeNormals[halfedgeID];
-#endif
 
             glm::vec3 p(P[0], P[1], P[2]);
             float ao = ComputeAO(p, n, sample_count, scene, rng);
 
-#if 1
             quad_texels[4*px+0] = (uint8_t)(ao*255.f);
             quad_texels[4*px+1] = (uint8_t)(ao*255.f);
             quad_texels[4*px+2] = (uint8_t)(ao*255.f);
             quad_texels[4*px+3] = 0xff;
-#else
-            quad_texels[4*px+0] = (uint8_t)(fabs(n.x)*255.f);
-            quad_texels[4*px+1] = (uint8_t)(fabs(n.y)*255.f);
-            quad_texels[4*px+2] = (uint8_t)(fabs(n.z)*255.f);
-            quad_texels[4*px+3] = 0xff;
-#endif
         }
     }
 }
@@ -345,18 +326,6 @@ int main(int argc, char** argv) {
     int done = 0;
 
 
-#if 0
-    std::mt19937 gen(1);
-    Rng rng;
-    rng.rnk = rank1();
-    std::uniform_real_distribution<float> dist(0,1);
-    rng.shift_u = dist(gen);
-    rng.shift_v = dist(gen);
-    // ground truth: 1/2
-    printf("%f\n", ComputeAO(glm::vec3(0,-0.5,0), glm::vec3(0,1,0), sample_count, scene, rng));
-    return 0;
-#endif
-
 #pragma omp parallel default(none) shared(halfedge_mesh, width, height, scene, geom, writer, log2_res, stderr, done, halfedgeNormals, sample_count) private(err)
     {
         std::vector<uint8_t> texels(width*height*4);
@@ -374,9 +343,9 @@ int main(int argc, char** argv) {
             int halfedge_max = (halfedge1 > halfedge2) ? halfedge1 : halfedge2;
             int halfedge_min = (halfedge1 < halfedge2) ? halfedge1 : halfedge2;
 
-            GenerateTexture(halfedge_mesh, halfedge_max, texels.data(), width, height, true, scene, geom, halfedgeNormals.data(), sample_count, rng);
+            GenerateTexture(halfedge_max, texels.data(), width, height, true, scene, geom, sample_count, rng);
             if (halfedge_min >= 0) {
-                GenerateTexture(halfedge_mesh, halfedge_min, texels.data(), width, height, false, scene, geom, halfedgeNormals.data(), sample_count, rng);
+                GenerateTexture(halfedge_min, texels.data(), width, height, false, scene, geom, sample_count, rng);
             } else {
                 for (int i = 0; i < height; i++) {
                     for (int j = width-i; j < height; j++) {
