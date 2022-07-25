@@ -27,7 +27,7 @@ glm::vec3 FaceBarycenter(cc_Mesh* mesh, int faceID)
 
 glm::vec3 ComputeVertexNormal(cc_Mesh* mesh, int vertexID, const std::vector<glm::vec3>& halfedgeNormals, const std::vector<float>& halfedgeAreas)
 {
-    int startHalfedge = ccm_VertexPointToHalfedgeID(mesh, vertexID);
+    int startHalfedge = ccm_VertexToHalfedgeID(mesh, vertexID);
     glm::vec3 n = glm::vec3(0);
     int currentHEdge = startHalfedge;
     do {
