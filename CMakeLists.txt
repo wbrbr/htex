@@ -94,6 +94,20 @@ target_compile_definitions(
 )
 
 unset(SRC_FILES)
+set(DEMO painter)
+set(SRC_DIR apps/painter)
+aux_source_directory(${SRC_DIR} SRC_FILES)
+add_executable(${DEMO} ${IMGUI_SRC_FILES} ${SRC_FILES} common/glad/glad.c common/imgui_impl.cpp)
+target_include_directories(${DEMO} PRIVATE ${SRC_DIR})
+target_link_libraries(${DEMO} glfw Htex_static)
+target_compile_definitions(
+        ${DEMO} PUBLIC
+        -DPATH_TO_SRC_DIRECTORY="${CMAKE_SOURCE_DIR}/${SRC_DIR}/"
+        -DPATH_TO_ROOT_DIRECTORY="${CMAKE_SOURCE_DIR}/"
+        -DIMGUI_IMPL_OPENGL_LOADER_GLAD
+)
+
+unset(SRC_FILES)
 set(DEMO uv2htx)
 set(SRC_DIR apps/uv2htx)
 aux_source_directory(${SRC_DIR} SRC_FILES)
