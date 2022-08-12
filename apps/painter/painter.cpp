@@ -184,6 +184,7 @@ enum {
     PROGRAM_VIEWER,
     PROGRAM_MAIN,
     PROGRAM_COMPUTE_HALFEDGE_NORMALS,
+    PROGRAM_BAKE_PAINT,
 
     PROGRAM_COUNT
 };
@@ -195,7 +196,6 @@ enum {
 
     UNIFORM_MVP,
     UNIFORM_TESS_FACTOR,
-    UNIFORM_SCREEN_RESOLUTION,
     UNIFORM_ALPHA_TEXTURES,
     UNIFORM_DISPLACEMENT_SCALE,
     UNIFORM_DISPLACEMENT_BIAS,
@@ -203,8 +203,11 @@ enum {
     UNIFORM_MODEL,
     UNIFORM_LOD_FACTOR,
     UNIFORM_ENABLE_ADAPTIVE_TESS,
-    UNIFORM_MOUSE_POSITION,
     UNIFORM_ENABLE_PAINTING,
+
+    UNIFORM_BAKEPAINT_SCREEN_RESOLUTION,
+    UNIFORM_BAKEPAINT_MOUSE_POSITION,
+    UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION,
 
     UNIFORM_COUNT
 };
@@ -321,9 +324,6 @@ void ConfigureViewerProgram()
 // -----------------------------------------------------------------------------
 void ConfigureMainProgram()
 {
-    glProgramUniform2f(g_gl.programs[PROGRAM_MAIN],
-                       g_gl.uniforms[UNIFORM_SCREEN_RESOLUTION],
-                       g_window.width, g_window.height);
     glProgramUniform1f(g_gl.programs[PROGRAM_MAIN],
                        g_gl.uniforms[UNIFORM_TESS_FACTOR],
                        1u << g_htex.tessFactor);
@@ -406,8 +406,7 @@ bool LoadMainProgram()
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_TEXTURE_HANDLES %i\n", BUFFER_HTEX_TEXTURE_HANDLES);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_QUAD_LOG2_RESOLUTIONS %i\n", BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_ALPHA_TEXTURE_HANDLES %i\n", BUFFER_HTEX_ALPHA_TEXTURE_HANDLES);
-    djgp_push_string(djp, "#define BUFFER_BINDING_HTEX_IMAGE_HANDLES %i\n",
-                     BUFFER_HTEX_IMAGE_HANDLES);
+    djgp_push_string(djp, "#define BUFFER_BINDING_HTEX_IMAGE_HANDLES %i\n", BUFFER_HTEX_IMAGE_HANDLES);
 
     djgp_push_file(djp, PATH_TO_ROOT_DIRECTORY "Htex.glsl");
 
@@ -450,7 +449,6 @@ bool LoadMainProgram()
 
     g_gl.uniforms[UNIFORM_MVP] =
         glGetUniformLocation(*glp, "u_ModelViewProjection");
-    g_gl.uniforms[UNIFORM_SCREEN_RESOLUTION] = glGetUniformLocation(*glp, "u_ScreenResolution");
     g_gl.uniforms[UNIFORM_TESS_FACTOR] = glGetUniformLocation(*glp, "u_TessFactor");
     g_gl.uniforms[UNIFORM_ALPHA_TEXTURES] = glGetUniformLocation(*glp, "u_AlphaTextures");
     g_gl.uniforms[UNIFORM_DISPLACEMENT_SCALE] = glGetUniformLocation(*glp, "u_DisplacementScale");
@@ -459,7 +457,6 @@ bool LoadMainProgram()
     g_gl.uniforms[UNIFORM_MODEL] = glGetUniformLocation(*glp, "u_Model");
     g_gl.uniforms[UNIFORM_LOD_FACTOR] = glGetUniformLocation(*glp, "u_LodFactor");
     g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS] = glGetUniformLocation(*glp, "u_EnableAdaptiveTess");
-    g_gl.uniforms[UNIFORM_MOUSE_POSITION] = glGetUniformLocation(*glp, "u_MousePosition");
     g_gl.uniforms[UNIFORM_ENABLE_PAINTING] = glGetUniformLocation(*glp, "u_EnablePainting");
 
     ConfigureMainProgram();
@@ -490,6 +487,35 @@ bool LoadHalfedgeNormalsComputeProgram()
     return (glGetError() == GL_NO_ERROR);
 }
 
+bool LoadBakePaintProgram()
+{
+    djg_program *djp = djgp_create();
+    GLuint *glp = &g_gl.programs[PROGRAM_BAKE_PAINT];
+
+    LOG("Loading {BakePaint-Program}");
+
+    djgp_push_string(djp, "#extension GL_NV_gpu_shader5 : enable\n");
+    djgp_push_string(djp, "#extension GL_ARB_bindless_texture : enable\n");
+    djp_setup_halfedge(djp);
+    djgp_push_string(djp, "#define BUFFER_BINDING_HTEX_IMAGE_HANDLES %i\n", BUFFER_HTEX_IMAGE_HANDLES);
+    djgp_push_string(djp, "#define TEXTURETYPE_COLOR %i\n", TEXTURETYPE_COLOR);
+
+    djgp_push_file(djp, PATH_TO_SHADER_DIRECTORY "BakePaint.glsl");
+
+    if (!djgp_to_gl(djp, 450, false, true, glp)) {
+        djgp_release(djp);
+
+        return false;
+    }
+
+    g_gl.uniforms[UNIFORM_BAKEPAINT_SCREEN_RESOLUTION] = glGetUniformLocation(*glp, "u_ScreenResolution");
+    g_gl.uniforms[UNIFORM_BAKEPAINT_MOUSE_POSITION] = glGetUniformLocation(*glp, "u_MousePosition");
+    g_gl.uniforms[UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION] = glGetUniformLocation(*glp, "u_ModelViewProjection");
+
+    djgp_release(djp);
+    return (glGetError() == GL_NO_ERROR);
+}
+
 /**
  * Load All Programs
  *
@@ -501,6 +527,7 @@ bool LoadPrograms()
     if (success) success = LoadViewerProgram();
     if (success) success = LoadMainProgram();
     if (success) success = LoadHalfedgeNormalsComputeProgram();
+    if (success) success = LoadBakePaintProgram();
 
     return success;
 }
@@ -1423,17 +1450,24 @@ void RenderScene()
     glUniform1f(g_gl.uniforms[UNIFORM_DISPLACEMENT_BIAS], g_state.displacementBias);
     glUniform1f(g_gl.uniforms[UNIFORM_LOD_FACTOR], ComputeLodFactor());
     glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS], g_state.enableAdaptiveTess);
-    glUniform2f(g_gl.uniforms[UNIFORM_MOUSE_POSITION], mousePosition.x, mousePosition.y);
-    glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_PAINTING], enablePainting);
+    glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_PAINTING], 0);
     glBindVertexArray(g_gl.vertexArrays[VERTEXARRAY_EMPTY]);
     glDrawArrays(GL_PATCHES, 0, 3 * g_htex.mesh->halfedgeCount);
     glBindVertexArray(0);
     glUseProgram(0);
     glDisable(GL_DEPTH_TEST);
 
-    glFinish();
     djgc_stop(g_gl.clocks[CLOCK_RENDER]);
 
+    if (enablePainting) {
+        glUseProgram(g_gl.programs[PROGRAM_BAKE_PAINT]);
+        glUniform2f(g_gl.uniforms[UNIFORM_BAKEPAINT_SCREEN_RESOLUTION],
+                    g_window.width, g_window.height);
+        glUniform2f(g_gl.uniforms[UNIFORM_BAKEPAINT_MOUSE_POSITION], mousePosition.x, mousePosition.y);
+        glUniformMatrix4fv(g_gl.uniforms[UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION], 1, 0, &mvp[0][0]);
+
+        glDispatchCompute(g_htex.mesh->edgeCount, 1 << 4, 1 << 4);
+    }
 
     // enable with uniform tessellation to check for cracks
 #if 0
