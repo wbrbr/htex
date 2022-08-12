@@ -27,6 +27,11 @@ writeonly buffer ccm_OutputVertices {
     vec4 u_OutputVertices[];
 };
 
+layout(std430, binding = BUFFER_BINDING_HTEX_IMAGE_HANDLES)
+readonly buffer HtexImageHandles {
+    uint64_t u_HtexImageHandles[];
+};
+
 /*******************************************************************************
 * TriangleLevelOfDetail -- Computes the LoD assocaited to a triangle
 *
@@ -179,6 +184,9 @@ patch in Triangle {
 layout(location = 0) flat out int o_HalfedgeID;
 layout(location = 1) out vec2 o_VertexUv;
 layout(location = 2) out vec3 o_VertexPosition;
+layout(location = 3) out vec4 o_V0;
+layout(location = 4) out vec4 o_V1;
+layout(location = 5) out vec4 o_V2;
 
 void main()
 {
@@ -221,10 +229,13 @@ void main()
     o_VertexUv = gl_TessCoord.xy;
     o_HalfedgeID = i_Patch.halfedgeID;
     o_VertexPosition = vertexPoint.xyz;
+    o_V0 = vertices[0];
+    o_V1 = vertices[1];
+    o_V2 = vertices[2];
 }
 #endif
 
-#ifdef GEOMETRY_SHADER
+#ifdef toto
 layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
 layout (location = 0) flat in int i_HalfedgeID[];
@@ -266,6 +277,9 @@ layout (location = 0) flat in int i_HalfedgeID;
 layout(location = 1) centroid in vec2 i_FragmentUV;
 layout (location = 2) noperspective in vec3 i_Distance;
 layout(location = 3) in vec3 i_FragmentNormal;
+layout(location = 4) flat in vec4 i_V0;
+layout(location = 5) flat in vec4 i_V1;
+layout(location = 6) flat in vec4 i_V2;
 layout (location = 0) out vec4 o_FragmentColor;
 
 void main()
@@ -275,6 +289,16 @@ void main()
 #elif SHADING_MODE == SHADING_DISPLACEMENT
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_DISPLACEMENT);
 #endif
+
+    int offset = ccm_EdgeCount()*TEXTURETYPE_COLOR;
+    int quadID = ccm_HalfedgeEdgeID(i_HalfedgeID);
+    vec2 xy = TriangleToQuadUV(i_HalfedgeID, i_FragmentUV);
+    layout(rgba8) image2D img = layout(rgba8) image2D(u_HtexImageHandles[offset+quadID]);
+    ivec2 size = imageSize(img);
+    ivec2 ij = ivec2(xy*size);
+    vec2 texel_uv = (vec2(ij)+0.5) / vec2(size);
+    //imageStore(img, ij, vec4(1,0,0,1));
+    imageStore(img, ij, vec4(texel_uv, 0, 1));
 
 #if FLAG_WIRE
     const float wireScale = 1.0; // scale of the wire in pixel

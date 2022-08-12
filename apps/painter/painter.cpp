@@ -168,7 +168,7 @@ enum {
     BUFFER_BARYCENTERS,
     BUFFER_FRUSTUM_PLANES,
     BUFFER_OUTPUT_VERTICES,
-    BUFFER_EDGE_IMAGE_HANDLES,
+    BUFFER_HTEX_IMAGE_HANDLES,
 
     BUFFER_COUNT
 };
@@ -222,6 +222,7 @@ struct OpenGLManager {
     GLuint samplers[SAMPLER_COUNT];
     std::vector<GLuint> edgeTextures;
     std::vector<uint64_t> edgeTextureHandles;
+    std::vector<uint64_t> edgeImageHandles;
     std::vector<uint64_t> alphaTextureHandles;
 
     djg_buffer *streams[STREAM_COUNT];
@@ -403,6 +404,9 @@ bool LoadMainProgram()
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_TEXTURE_HANDLES %i\n", BUFFER_HTEX_TEXTURE_HANDLES);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_QUAD_LOG2_RESOLUTIONS %i\n", BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
     djgp_push_string(djp, "#define HTEX_BUFFER_BINDING_ALPHA_TEXTURE_HANDLES %i\n", BUFFER_HTEX_ALPHA_TEXTURE_HANDLES);
+    djgp_push_string(djp, "#define BUFFER_BINDING_HTEX_IMAGE_HANDLES %i\n",
+                     BUFFER_HTEX_IMAGE_HANDLES);
+
     djgp_push_file(djp, PATH_TO_ROOT_DIRECTORY "Htex.glsl");
 
     if (g_htex.flags.wireframe) {
@@ -453,6 +457,7 @@ bool LoadMainProgram()
     g_gl.uniforms[UNIFORM_MODEL] = glGetUniformLocation(*glp, "u_Model");
     g_gl.uniforms[UNIFORM_LOD_FACTOR] = glGetUniformLocation(*glp, "u_LodFactor");
     g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS] = glGetUniformLocation(*glp, "u_EnableAdaptiveTess");
+
 
     ConfigureMainProgram();
 
@@ -937,21 +942,33 @@ bool ParseCommandLine(int argc, char **argv, Args& args)
 bool LoadHalfedgeTextureHandles()
 {
     g_gl.edgeTextureHandles.resize(g_gl.edgeTextures.size());
+    g_gl.edgeImageHandles.resize(g_gl.edgeTextures.size());
     for (unsigned int i = 0; i < g_gl.edgeTextureHandles.size(); i++) {
         if (g_gl.edgeTextures[i] > 0) {
             g_gl.edgeTextureHandles[i] = glGetTextureSamplerHandleARB(g_gl.edgeTextures[i], g_gl.samplers[SAMPLER_EDGE_TEXTURES]);
+            g_gl.edgeImageHandles[i] = glGetImageHandleARB(g_gl.edgeTextures[i], 0, false, 0, GL_RGBA8);
         } else {
             g_gl.edgeTextureHandles[i] = glGetTextureSamplerHandleARB(g_gl.textures[TEXTURE_BLACK], g_gl.samplers[SAMPLER_EDGE_TEXTURES]);
+            g_gl.edgeImageHandles[i] = glGetImageHandleARB(g_gl.textures[TEXTURE_BLACK], 0, false, 0, GL_RGBA8);
         }
         if (!glIsTextureHandleResidentARB(g_gl.edgeTextureHandles[i])) {
             glMakeTextureHandleResidentARB(g_gl.edgeTextureHandles[i]);
+        }
+        if (!glIsImageHandleResidentARB(g_gl.edgeImageHandles[i])) {
+            glMakeImageHandleResidentARB(g_gl.edgeImageHandles[i], GL_READ_WRITE);
         }
     }
 
     if (glGetError() != GL_NO_ERROR) return false;
 
-    return LoadBuffer(BUFFER_HTEX_TEXTURE_HANDLES, g_gl.edgeTextureHandles.size() * sizeof(g_gl.edgeTextureHandles[0]),
-                      g_gl.edgeTextureHandles.data(), 0);
+    if (!LoadBuffer(BUFFER_HTEX_TEXTURE_HANDLES, g_gl.edgeTextureHandles.size() * sizeof(g_gl.edgeTextureHandles[0]), g_gl.edgeTextureHandles.data(), 0)) {
+        return false;
+    }
+    if (!LoadBuffer(BUFFER_HTEX_IMAGE_HANDLES, g_gl.edgeImageHandles.size() * sizeof(g_gl.edgeImageHandles[0]), g_gl.edgeImageHandles.data(), 0)) {
+        return false;
+    }
+
+    return true;
 }
 
 bool CreateHalfedgeSampler()
@@ -1002,15 +1019,13 @@ bool CreateHalfedgeSampler()
     return (glGetError() == GL_NO_ERROR);
 }
 
+#if 0
 bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textureType)
 {
     djg_program *djp_preprocessCorners = djgp_create();
     djgp_push_string(djp_preprocessCorners, "#extension GL_NV_gpu_shader5 : enable\n");
     djgp_push_string(djp_preprocessCorners, "#extension GL_ARB_bindless_texture : enable\n");
     djp_setup_halfedge(djp_preprocessCorners);
-    djgp_push_string(djp_preprocessCorners,
-                     "#define BUFFER_BINDING_EDGE_IMAGE_HANDLES %i\n",
-                     BUFFER_EDGE_IMAGE_HANDLES);
     djgp_push_string(djp_preprocessCorners,
                     "#define BUFFER_BINDING_HTEX_QUAD_LOG2_RESOLUTIONS %i\n",
                     BUFFER_HTEX_QUAD_LOG2_RESOLUTIONS);
@@ -1082,6 +1097,7 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
 
     return (glGetError() == GL_NO_ERROR);
 }
+#endif
 
 bool LoadHtex(const char *pathToFile, int textureType)
 {
