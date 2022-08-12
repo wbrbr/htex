@@ -203,6 +203,8 @@ enum {
     UNIFORM_MODEL,
     UNIFORM_LOD_FACTOR,
     UNIFORM_ENABLE_ADAPTIVE_TESS,
+    UNIFORM_MOUSE_POSITION,
+    UNIFORM_ENABLE_PAINTING,
 
     UNIFORM_COUNT
 };
@@ -457,7 +459,8 @@ bool LoadMainProgram()
     g_gl.uniforms[UNIFORM_MODEL] = glGetUniformLocation(*glp, "u_Model");
     g_gl.uniforms[UNIFORM_LOD_FACTOR] = glGetUniformLocation(*glp, "u_LodFactor");
     g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS] = glGetUniformLocation(*glp, "u_EnableAdaptiveTess");
-
+    g_gl.uniforms[UNIFORM_MOUSE_POSITION] = glGetUniformLocation(*glp, "u_MousePosition");
+    g_gl.uniforms[UNIFORM_ENABLE_PAINTING] = glGetUniformLocation(*glp, "u_EnablePainting");
 
     ConfigureMainProgram();
 
@@ -1391,6 +1394,17 @@ void RenderScene()
     LoadFrustum(mvp, planes);
     LoadBuffer(BUFFER_FRUSTUM_PLANES, sizeof(planes), planes, 0);
 
+    glm::vec2 mousePosition;
+    {
+        double xpos, ypos;
+        glfwGetCursorPos(g_window.handle, &xpos, &ypos);
+        mousePosition.x = (float)xpos / (float)g_window.width;
+        mousePosition.y = (float)ypos / (float)g_window.height;
+        mousePosition.y = 1.f - mousePosition.y;
+    }
+
+    bool enablePainting = (glfwGetKey(g_window.handle, GLFW_KEY_SPACE) == GLFW_PRESS);
+
     djgc_start(g_gl.clocks[CLOCK_RENDER]);
 
     glUseProgram(g_gl.programs[PROGRAM_COMPUTE_HALFEDGE_NORMALS]);
@@ -1409,13 +1423,17 @@ void RenderScene()
     glUniform1f(g_gl.uniforms[UNIFORM_DISPLACEMENT_BIAS], g_state.displacementBias);
     glUniform1f(g_gl.uniforms[UNIFORM_LOD_FACTOR], ComputeLodFactor());
     glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_ADAPTIVE_TESS], g_state.enableAdaptiveTess);
+    glUniform2f(g_gl.uniforms[UNIFORM_MOUSE_POSITION], mousePosition.x, mousePosition.y);
+    glUniform1i(g_gl.uniforms[UNIFORM_ENABLE_PAINTING], enablePainting);
     glBindVertexArray(g_gl.vertexArrays[VERTEXARRAY_EMPTY]);
     glDrawArrays(GL_PATCHES, 0, 3 * g_htex.mesh->halfedgeCount);
     glBindVertexArray(0);
     glUseProgram(0);
     glDisable(GL_DEPTH_TEST);
 
+    glFinish();
     djgc_stop(g_gl.clocks[CLOCK_RENDER]);
+
 
     // enable with uniform tessellation to check for cracks
 #if 0

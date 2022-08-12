@@ -10,6 +10,8 @@ uniform float u_DisplacementBias;
 uniform float u_DisplacementScale;
 
 uniform bool u_EnableAdaptiveTess;
+uniform vec2 u_MousePosition; // in [0,1]
+uniform bool u_EnablePainting;
 
 
 layout(std430, binding = BUFFER_BINDING_HALFEDGE_NORMALS)
@@ -276,10 +278,9 @@ void main()
 layout (location = 0) flat in int i_HalfedgeID;
 layout(location = 1) centroid in vec2 i_FragmentUV;
 layout (location = 2) noperspective in vec3 i_Distance;
-layout(location = 3) in vec3 i_FragmentNormal;
-layout(location = 4) flat in vec4 i_V0;
-layout(location = 5) flat in vec4 i_V1;
-layout(location = 6) flat in vec4 i_V2;
+layout(location = 3) flat in vec4 i_V0;
+layout(location = 4) flat in vec4 i_V1;
+layout(location = 5) flat in vec4 i_V2;
 layout (location = 0) out vec4 o_FragmentColor;
 
 void main()
@@ -290,15 +291,37 @@ void main()
     vec4 color = Htexture(i_HalfedgeID, i_FragmentUV, TEXTURETYPE_DISPLACEMENT);
 #endif
 
-    int offset = ccm_EdgeCount()*TEXTURETYPE_COLOR;
-    int quadID = ccm_HalfedgeEdgeID(i_HalfedgeID);
-    vec2 xy = TriangleToQuadUV(i_HalfedgeID, i_FragmentUV);
-    layout(rgba8) image2D img = layout(rgba8) image2D(u_HtexImageHandles[offset+quadID]);
-    ivec2 size = imageSize(img);
-    ivec2 ij = ivec2(xy*size);
-    vec2 texel_uv = (vec2(ij)+0.5) / vec2(size);
-    //imageStore(img, ij, vec4(1,0,0,1));
-    imageStore(img, ij, vec4(texel_uv, 0, 1));
+    if (u_EnablePainting) {
+        int offset = ccm_EdgeCount()*TEXTURETYPE_COLOR;
+        int quadID = ccm_HalfedgeEdgeID(i_HalfedgeID);
+        vec2 xy = TriangleToQuadUV(i_HalfedgeID, i_FragmentUV);
+        layout(rgba8) image2D img = layout(rgba8) image2D(u_HtexImageHandles[offset+quadID]);
+        ivec2 size = imageSize(img);
+        ivec2 ij = ivec2(xy*size);
+
+        vec2 texel_uv = (ivec2(i_FragmentUV*size)+0.5) / vec2(size);
+
+        vec4 texel_pos = (1-texel_uv.x-texel_uv.y)*i_V0 + texel_uv.x*i_V1 + texel_uv.y*i_V2;
+        vec4 texel_screenspace = u_ModelViewProjection * texel_pos;
+        texel_screenspace /= texel_screenspace.w;
+
+        texel_screenspace.xy = texel_screenspace.xy*0.5+0.5;
+        //imageStore(img, ij, vec4(1,0,0,1));
+
+        //imageStore(img, ij, vec4(texel_uv, 0, 1));
+        //imageStore(img, ij, texel_pos);
+        //imageStore(img, ij, vec4(texel_screenspace.xy, 0, 1));
+        //imageStore(img, ij, vec4(u_MousePosition, 0, 1));
+        vec2 aspect = vec2(1, 9.0/16.0);
+        float d = distance(texel_screenspace.xy*aspect, u_MousePosition*aspect);
+        float sigma = 0.03;
+        float coef = exp(-d*d/(sigma*sigma));
+
+        vec4 oldTexel = imageLoad(img, ij);
+        vec4 newTexel = coef * vec4(1,0,0,1) + (1-coef) * oldTexel;
+        //imageStore(img, ij, vec4(coef,coef,coef, 1));
+        imageStore(img, ij, newTexel);
+    }
 
 #if FLAG_WIRE
     const float wireScale = 1.0; // scale of the wire in pixel
