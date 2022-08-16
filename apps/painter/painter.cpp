@@ -208,6 +208,7 @@ enum {
     UNIFORM_BAKEPAINT_SCREEN_RESOLUTION,
     UNIFORM_BAKEPAINT_MOUSE_POSITION,
     UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION,
+    UNIFORM_BAKEPAINT_DEPTH_BUFFER,
 
     UNIFORM_COUNT
 };
@@ -511,6 +512,7 @@ bool LoadBakePaintProgram()
     g_gl.uniforms[UNIFORM_BAKEPAINT_SCREEN_RESOLUTION] = glGetUniformLocation(*glp, "u_ScreenResolution");
     g_gl.uniforms[UNIFORM_BAKEPAINT_MOUSE_POSITION] = glGetUniformLocation(*glp, "u_MousePosition");
     g_gl.uniforms[UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION] = glGetUniformLocation(*glp, "u_ModelViewProjection");
+    g_gl.uniforms[UNIFORM_BAKEPAINT_DEPTH_BUFFER] = glGetUniformLocation(*glp, "u_DepthBuffer");
 
     djgp_release(djp);
     return (glGetError() == GL_NO_ERROR);
@@ -1457,7 +1459,6 @@ void RenderScene()
     glUseProgram(0);
     glDisable(GL_DEPTH_TEST);
 
-    djgc_stop(g_gl.clocks[CLOCK_RENDER]);
 
     if (enablePainting) {
         glUseProgram(g_gl.programs[PROGRAM_BAKE_PAINT]);
@@ -1465,10 +1466,12 @@ void RenderScene()
                     g_window.width, g_window.height);
         glUniform2f(g_gl.uniforms[UNIFORM_BAKEPAINT_MOUSE_POSITION], mousePosition.x, mousePosition.y);
         glUniformMatrix4fv(g_gl.uniforms[UNIFORM_BAKEPAINT_MODEL_VIEW_PROJECTION], 1, 0, &mvp[0][0]);
+        glUniform1i(g_gl.uniforms[UNIFORM_BAKEPAINT_DEPTH_BUFFER], TEXTURE_SCENE_DEPTH_BUFFER);
 
         glDispatchCompute(g_htex.mesh->edgeCount, 1 << 4, 1 << 4);
     }
 
+    djgc_stop(g_gl.clocks[CLOCK_RENDER]);
     // enable with uniform tessellation to check for cracks
 #if 0
     int tessFactor = 1 << g_htex.tessFactor;

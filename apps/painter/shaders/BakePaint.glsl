@@ -4,6 +4,8 @@ uniform vec2 u_MousePosition;
 uniform vec2 u_ScreenResolution;
 uniform mat4 u_ModelViewProjection;
 
+uniform sampler2D u_DepthBuffer;
+
 layout(std430, binding = BUFFER_BINDING_HTEX_IMAGE_HANDLES)
 readonly buffer HtexImageHandles {
     uint64_t u_HtexImageHandles[];
@@ -61,11 +63,23 @@ void main() {
 
     //imageStore(img, ij, vec4(0,1,0,1));
 
-    vec4 texel_pos = vec4((1-texel_uv.x-texel_uv.y)*v0 + texel_uv.x*v1 + texel_uv.y*v2, 1);
-    vec4 texel_screenspace = u_ModelViewProjection * texel_pos;
-    texel_screenspace /= texel_screenspace.w;
 
-    texel_screenspace.xy = texel_screenspace.xy*0.5+0.5;
+    vec4 texel_pos = vec4((1-texel_uv.x-texel_uv.y)*v0 + texel_uv.x*v1 + texel_uv.y*v2, 1);
+    vec4 texel_clip = u_ModelViewProjection * texel_pos;
+    float texel_w = texel_clip.w;
+    texel_clip /= texel_clip.w;
+
+    vec2 texel_screenspace = texel_clip.xy*0.5+0.5;
+    if (any(lessThan(texel_screenspace, vec2(0))) || any(greaterThan(texel_screenspace, vec2(1)))) {
+        return;
+    }
+
+    float stored_z = texture2D(u_DepthBuffer, texel_screenspace).r;
+    if (texel_clip.z > stored_z) return;
+    //imageStore(img, ij, vec4(pow(texel_clip.z,1000)));
+    //imageStore(img, ij, vec4(pow(-texel_clip.z+stored_z,1000)));
+    //imageStore(img, ij, vec4(pow(stored_z-texel_clip.z, 0.01)));
+    //return;
     //imageStore(img, ij, vec4(1,0,0,1));
 
     //imageStore(img, ij, vec4(texel_uv, 0, 1));
@@ -77,6 +91,7 @@ void main() {
     float sigma = 0.03;
     float coef = exp(-d*d/(sigma*sigma));
 
+    if (coef < 1e-2) return;
     vec4 oldTexel = imageLoad(img, ij);
     vec4 newTexel = coef * vec4(1,0,0,1) + (1-coef) * oldTexel;
     //imageStore(img, ij, vec4(coef,coef,coef, 1));
