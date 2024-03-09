@@ -396,6 +396,7 @@ bool LoadMainProgram()
     LOG("Loading {Main-Program}");
 
     djgp_push_string(djp, "#extension GL_NV_gpu_shader5 : enable\n");
+    djgp_push_string(djp, "#extension GL_AMD_gpu_shader_int64 : enable\n");
     djgp_push_string(djp, "#extension GL_ARB_bindless_texture : enable\n");
     djp_setup_halfedge(djp);
 
@@ -1006,6 +1007,7 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
 {
     djg_program *djp_preprocessCorners = djgp_create();
     djgp_push_string(djp_preprocessCorners, "#extension GL_NV_gpu_shader5 : enable\n");
+    djgp_push_string(djp_preprocessCorners, "#extension GL_AMD_gpu_shader_int64 : enable\n");
     djgp_push_string(djp_preprocessCorners, "#extension GL_ARB_bindless_texture : enable\n");
     djp_setup_halfedge(djp_preprocessCorners);
     djgp_push_string(djp_preprocessCorners,
@@ -1029,6 +1031,7 @@ bool PreprocessCorners(const std::vector<unsigned int>& edgeTextures, int textur
 
     djg_program *djp_preprocessCornersFacePoints = djgp_create();
     djgp_push_string(djp_preprocessCornersFacePoints, "#extension GL_NV_gpu_shader5 : enable\n");
+    djgp_push_string(djp_preprocessCornersFacePoints, "#extension GL_AMD_gpu_shader_int64 : enable\n");
     djgp_push_string(djp_preprocessCornersFacePoints, "#extension GL_ARB_bindless_texture : enable\n");
     djp_setup_halfedge(djp_preprocessCornersFacePoints);
     djgp_push_string(djp_preprocessCornersFacePoints,
@@ -1811,7 +1814,10 @@ int main(int argc, char **argv)
     ImGui_ImplGlfw_InitForOpenGL(g_window.handle, false);
     ImGui_ImplOpenGL3_Init("#version 450");
 
-    if (!CheckExtensions({"GL_NV_gpu_shader5", "GL_ARB_bindless_texture"})) {
+
+    if (!(CheckExtensions({"GL_ARB_bindless_texture"})
+	  && (CheckExtensions({"GL_AMD_gpu_shader_int64"})
+	      || CheckExtensions({"GL_NV_gpu_shader5"})))) {
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
         glfwTerminate();

@@ -377,10 +377,10 @@ int ccm_HalfedgeFaceID(int halfedgeID)
     return ccm__Halfedge(halfedgeID).faceID;
 }
 
-float ccm_HalfedgeSharpness(int halfedgeID)
-{
-    return ccm_CreaseSharpness(ccm_HalfedgeEdgeID(halfedgeID));
-}
+//float ccm_HalfedgeSharpness(int halfedgeID)
+//{
+//    return ccm_CreaseSharpness(ccm_HalfedgeEdgeID(halfedgeID));
+//}
 
 vec3 ccm_HalfedgeVertexPoint(int halfedgeID)
 {
