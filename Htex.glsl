@@ -15,14 +15,24 @@ readonly buffer HtexQuadLog2Resolutions {
 
 vec4 SampleQuad(int quadID, vec2 xy, int channel)
 {
-    sampler2D quadTexture = sampler2D(u_HtexTextureHandles[channel*ccm_EdgeCount()+quadID]);
+    uint64_t texture_handle = u_HtexTextureHandles[channel*ccm_EdgeCount()+quadID];
+    #ifdef GL_AMD_gpu_shader_int64
+	sampler2D quadTexture = sampler2D(unpackUint2x32(texture_handle));
+    #else
+	sampler2D quadTexture = sampler2D(texture_handle);
+    #endif
     return texture(quadTexture, xy);
 }
 
 float SampleAlpha(int quadID, vec2 xy)
 {
     ivec2 res = u_QuadLog2Resolutions[quadID];
-    sampler2D alphaTexture = sampler2D(u_HtexAlphaTextureHandles[res.y*HTEX_NUM_LOG2_RESOLUTIONS+res.x]);
+    uint64_t alpha_handle = u_HtexAlphaTextureHandles[res.y*HTEX_NUM_LOG2_RESOLUTIONS+res.x];
+    #ifdef GL_AMD_gpu_shader_int64
+	sampler2D alphaTexture = sampler2D(unpackUint2x32(alpha_handle));
+    #else
+	sampler2D alphaTexture = sampler2D(alpha_handle);
+    #endif
     return texture(alphaTexture, xy).r;
 }
 
